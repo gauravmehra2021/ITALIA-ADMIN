@@ -1,6 +1,6 @@
 import type { ApiResponse } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5280';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5057';
 
 export class ApiError extends Error {
   status: number;

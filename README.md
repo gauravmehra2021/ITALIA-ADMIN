@@ -1,32 +1,56 @@
-# React + TypeScript + Vite
+# SS Europa — Admin & Staff Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 / TypeScript / Vite management portal for Teachers (Mentors), Admissions Staff, and Administrators.
 
-Currently, two official plugins are available:
+## Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+This dashboard communicates with the **.NET 10 Web API** (`ITALIA-backend`) and serves as the internal operations center for SS Europa:
 
-## React Compiler
+- 🎓 **Curriculum & Materials**: Create courses, manage capacity, and upload video/audio/document lessons.
+- 📅 **Live Class Scheduling**: Schedule Google Meet sessions and notify enrolled mobile students.
+- 📥 **Admissions & Enquiries Desk**: Review leads and contact requests submitted from the public website (`ITALIA`) and track follow-ups.
+- 👥 **User & Role Administration**: Oversee student enrollments, mentor assignments, and staff roles.
+- 🤖 **AI Assistant Playground**: Test and audit AI tutor and translator prompt workflows.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Prerequisites
 
-## Expanding the Oxlint configuration
+- Node.js 20+ / npm 10+
+- Running backend API (`ITALIA-backend` on port `5057`)
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Quick Start
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+2. Environment configuration:
+   The `.env` file points to the backend:
+   ```env
+   VITE_API_BASE_URL=http://localhost:5057
+   ```
+
+3. Run development server:
+   ```bash
+   npm run dev
+   ```
+   The application will start on **http://localhost:5173**.
+
+4. Production build:
+   ```bash
+   npm run build
+   ```
+
+## Demo Accounts
+
+You can sign in instantly using the demo tiles on the login page:
+
+| Email | Role | Responsibilities |
+|---|---|---|
+| `mentor@sseuropa.demo` | Teacher (Mentor) | Courses, lessons, live classes, alerts |
+| `staff@sseuropa.demo` | Staff (Admissions) | Website contact requests & lead conversion |
+| `admin@sseuropa.demo` | Administrator | Curriculum, staff management, stats |
+| `superadmin@sseuropa.demo` | Super Admin | Full governance & system logs |
+
+Password for password+OTP login: `Demo@12345`
+
