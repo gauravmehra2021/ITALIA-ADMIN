@@ -225,6 +225,15 @@ export interface MentorDashboard {
   pendingAttendance: number;
 }
 
+export interface StaffDashboard {
+  totalEnquiries: number;
+  newEnquiries: number;
+  inFollowUpEnquiries: number;
+  enrolledEnquiries: number;
+  openTickets: number;
+  unreadNotifications: number;
+}
+
 export interface AuditLog {
   id: string;
   actorUserId?: string | null;

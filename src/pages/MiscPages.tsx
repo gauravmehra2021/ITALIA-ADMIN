@@ -443,36 +443,110 @@ export function SupportPage() {
 export function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  async function load() {
+    try {
+      setUsers(await usersApi.list());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    void (async () => {
-      try {
-        setUsers(await usersApi.list());
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load users');
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void load();
   }, []);
+
+  async function toggleStatus(u: User) {
+    setError(null);
+    setMessage(null);
+    const newActive = u.status !== 'Active';
+    try {
+      await usersApi.updateStatus(u.id, newActive);
+      setMessage(`User ${u.fullName} is now ${newActive ? 'Active' : 'Suspended'}.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update user status');
+    }
+  }
+
+  async function changeRole(u: User, newRole: string) {
+    setError(null);
+    setMessage(null);
+    try {
+      await usersApi.updateRole(u.id, newRole);
+      setMessage(`Role for ${u.fullName} updated.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update user role');
+    }
+  }
 
   if (loading) return <Loading />;
   if (error) return <ErrorBox message={error} />;
 
   return (
     <div className="animate-rise">
-      <div className="page-header"><div><h1>Users</h1><p>Admin directory of platform accounts.</p></div></div>
+      <div className="page-header">
+        <div>
+          <h1>Users & Roles Directory</h1>
+          <p>Admin directory of platform accounts. Manage user roles, access statuses, and active permissions.</p>
+        </div>
+      </div>
+      {message && <SuccessBox message={message} />}
       <div className="panel">
         <table className="table">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
-                <td>{u.fullName}</td>
+                <td><strong>{u.fullName}</strong></td>
                 <td>{u.email}</td>
-                <td>{u.role}</td>
-                <td>{u.status}</td>
+                <td>
+                  <select
+                    value={u.role}
+                    onChange={(e) => void changeRole(u, e.target.value)}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                      background: 'var(--panel-2, rgba(255,255,255,0.05))',
+                      color: 'inherit',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <option value="0">Student / User</option>
+                    <option value="1">Mentor / Teacher</option>
+                    <option value="2">Staff</option>
+                    <option value="3">Admin</option>
+                    <option value="4">SuperAdmin</option>
+                  </select>
+                </td>
+                <td>
+                  <span className="badge">
+                    {u.status}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                    onClick={() => void toggleStatus(u)}
+                  >
+                    {u.status === 'Active' ? 'Suspend' : 'Activate'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -535,6 +609,7 @@ export function AdminPage() {
         </div>
       </div>
       <div className="grid-3">
+        <Link className="panel" to="/app/enquiries"><h2>Admissions & Leads</h2><p>Review website contact enquiries and student pipeline.</p></Link>
         <Link className="panel" to="/app/courses"><h2>Courses</h2><p>Publish and manage catalogue capacity.</p></Link>
         <Link className="panel" to="/app/users"><h2>Users</h2><p>Review roles and account status.</p></Link>
         <Link className="panel" to="/app/audit"><h2>Security audit</h2><p>Inspect authentication and admin events.</p></Link>

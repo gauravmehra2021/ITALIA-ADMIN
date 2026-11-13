@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { Empty, ErrorBox, Loading } from '../components/StateBlock';
 import { useAuth } from '../hooks/useAuth';
 import { announcementsApi, dashboardApi } from '../services/platformApi';
-import type { AdminDashboard, Announcement, DashboardStats, MentorDashboard } from '../types';
+import type { AdminDashboard, Announcement, DashboardStats, MentorDashboard, StaffDashboard } from '../types';
 
 export function DashboardPage() {
   const { user, hasRole } = useAuth();
   const [student, setStudent] = useState<DashboardStats | null>(null);
   const [admin, setAdmin] = useState<AdminDashboard | null>(null);
   const [mentor, setMentor] = useState<MentorDashboard | null>(null);
+  const [staff, setStaff] = useState<StaffDashboard | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +24,8 @@ export function DashboardPage() {
         setAnnouncements(notes);
         if (hasRole('Admin', 'SuperAdmin')) setAdmin(await dashboardApi.admin());
         else if (hasRole('Mentor')) setMentor(await dashboardApi.mentor());
-        else if (!hasRole('Staff')) setStudent(await dashboardApi.student());
+        else if (hasRole('Staff')) setStaff(await dashboardApi.staff());
+        else setStudent(await dashboardApi.student());
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load dashboard');
       } finally {
@@ -62,6 +64,26 @@ export function DashboardPage() {
               Manage Enquiries & Leads →
             </Link>
           </div>
+        </div>
+      )}
+
+      {staff && (
+        <div className="grid-3" style={{ marginBottom: '1.25rem' }}>
+          <div className="stat"><span>Total Enquiries</span><strong>{staff.totalEnquiries}</strong></div>
+          <div className="stat" style={{ borderLeft: '4px solid #0284c7' }}>
+            <span style={{ color: '#0369a1' }}>New Leads</span>
+            <strong style={{ color: '#0369a1' }}>{staff.newEnquiries}</strong>
+          </div>
+          <div className="stat" style={{ borderLeft: '4px solid #d97706' }}>
+            <span style={{ color: '#b45309' }}>In Follow-Up</span>
+            <strong style={{ color: '#b45309' }}>{staff.inFollowUpEnquiries}</strong>
+          </div>
+          <div className="stat" style={{ borderLeft: '4px solid #16a34a' }}>
+            <span style={{ color: '#15803d' }}>Enrolled Leads</span>
+            <strong style={{ color: '#15803d' }}>{staff.enrolledEnquiries}</strong>
+          </div>
+          <div className="stat"><span>Open Helpdesk Tickets</span><strong>{staff.openTickets}</strong></div>
+          <div className="stat"><span>Unread Alerts</span><strong>{staff.unreadNotifications}</strong></div>
         </div>
       )}
 

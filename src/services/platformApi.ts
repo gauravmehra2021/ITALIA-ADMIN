@@ -18,6 +18,7 @@ import type {
   PagedResult,
   Payment,
   Progress,
+  StaffDashboard,
   Subscription,
   SupportTicket,
   TestAttempt,
@@ -52,6 +53,10 @@ export const authApi = {
     firstName: string;
     lastName: string;
   }) => api.post<User>('/api/auth/register', payload),
+  forgotPassword: (email: string) =>
+    api.post<{ challengeId: string; expiresAt: string }>('/api/auth/forgot-password', { email }),
+  resetPassword: (payload: { challengeId: string; code: string; newPassword: string }) =>
+    api.post('/api/auth/reset-password', payload),
   logout: () => api.post('/api/auth/logout'),
 };
 
@@ -67,6 +72,8 @@ export const coursesApi = {
   get: (id: string) => api.get<Course>(`/api/courses/${id}`),
   enroll: (id: string) => api.post(`/api/courses/${id}/enroll`),
   create: (body: unknown) => api.post<Course>('/api/courses', body),
+  update: (id: string, body: unknown) => api.put<Course>(`/api/courses/${id}`, body),
+  delete: (id: string) => api.delete(`/api/courses/${id}`),
 };
 
 export const classesApi = {
@@ -143,10 +150,15 @@ export const dashboardApi = {
   student: () => api.get<DashboardStats>('/api/dashboard/student'),
   admin: () => api.get<AdminDashboard>('/api/dashboard/admin'),
   mentor: () => api.get<MentorDashboard>('/api/dashboard/mentor'),
+  staff: () => api.get<StaffDashboard>('/api/dashboard/staff'),
 };
 
 export const usersApi = {
   list: () => api.get<User[]>('/api/users'),
+  updateStatus: (id: string, isActive: boolean) =>
+    api.put<User>(`/api/users/${id}/status`, { isActive }),
+  updateRole: (id: string, role: number | string) =>
+    api.put<User>(`/api/users/${id}/role`, { role: Number(role) }),
 };
 
 export const auditApi = {
