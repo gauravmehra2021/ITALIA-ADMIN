@@ -1,6 +1,7 @@
 import type { ApiResponse } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5057';
+const rawBase = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5057').trim().replace(/\/+$/, '');
+const API_BASE = rawBase.endsWith('/api') ? rawBase.slice(0, -4) : rawBase;
 
 export class ApiError extends Error {
   status: number;
