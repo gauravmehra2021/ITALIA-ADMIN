@@ -54,12 +54,12 @@ export function AiPage() {
     <div className="animate-rise">
       <div className="page-header">
         <div>
-          <h1>AI learning layer</h1>
-          <p>Mock LLM responses routed through the .NET API — no live AI credentials required.</p>
+          <h1>AI Learning & Conversation Layer</h1>
+          <p>Powered by Google Gemini AI — conversational Italian tutor, grammar explanations, and practice.</p>
         </div>
       </div>
       {error && <ErrorBox message={error} />}
-      {latest && <SuccessBox message="Mock AI response received." />}
+      {latest && <SuccessBox message="Gemini AI response received." />}
 
       <form className="panel" style={{ marginBottom: '1rem' }} onSubmit={onSubmit}>
         <div className="field">
@@ -81,7 +81,7 @@ export function AiPage() {
         <div className="panel" style={{ marginBottom: '1rem' }}>
           <h2 style={{ marginBottom: '0.5rem' }}>Latest response</h2>
           <p style={{ whiteSpace: 'pre-wrap' }}>{latest.response}</p>
-          <span className="badge badge-warn">Mocked · {latest.tokensUsed} tokens</span>
+          <span className="badge badge-success">Gemini AI · {latest.tokensUsed} tokens</span>
         </div>
       )}
 

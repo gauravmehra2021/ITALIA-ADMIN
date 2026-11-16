@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { AppLayout } from '../layouts/AppLayout';
-import { AssessmentTakePage, AssessmentsPage } from '../pages/AssessmentsPage';
 import { AiPage } from '../pages/AiPage';
 import { ClassesPage } from '../pages/ClassesPage';
 import { CourseDetailPage } from '../pages/CourseDetailPage';
@@ -81,22 +80,8 @@ export function AppRouter() {
             </RoleGate>
           }
         />
-        <Route
-          path="assessments"
-          element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
-              <AssessmentsPage />
-            </RoleGate>
-          }
-        />
-        <Route
-          path="assessments/:id"
-          element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
-              <AssessmentTakePage />
-            </RoleGate>
-          }
-        />
+        <Route path="assessments/*" element={<Navigate to="/app/courses" replace />} />
+        <Route path="assessments" element={<Navigate to="/app/courses" replace />} />
         <Route
           path="notifications"
           element={

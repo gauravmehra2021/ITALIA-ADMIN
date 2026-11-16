@@ -29,7 +29,6 @@ export function AppLayout() {
             <>
               <NavLink to="/app/courses">Courses & Content</NavLink>
               <NavLink to="/app/classes">Live Classes</NavLink>
-              <NavLink to="/app/assessments">Assessments</NavLink>
             </>
           )}
 

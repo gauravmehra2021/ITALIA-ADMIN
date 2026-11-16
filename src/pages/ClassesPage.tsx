@@ -6,6 +6,7 @@ import { classesApi, coursesApi } from '../services/platformApi';
 import { enumLabel, type ClassSession, type Course } from '../types';
 
 const CLASS_STATUS = ['Scheduled', 'Live', 'Completed', 'Cancelled'];
+const DEFAULT_MEET_URL = 'https://meet.google.com/uyj-tfhh-zsq';
 
 export function ClassesPage() {
   const { hasRole, user } = useAuth();
@@ -22,6 +23,7 @@ export function ClassesPage() {
   const [classTitle, setClassTitle] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [duration, setDuration] = useState(60);
+  const [meetUrl, setMeetUrl] = useState(DEFAULT_MEET_URL);
   const [creating, setCreating] = useState(false);
 
   async function load() {
@@ -86,10 +88,12 @@ export function ClassesPage() {
         title: classTitle.trim(),
         scheduledAtUtc: new Date(scheduledAt).toISOString(),
         durationMinutes: duration,
+        meetingUrl: meetUrl.trim() || undefined,
       });
 
       setMessage('New live class session scheduled.');
       setClassTitle('');
+      setMeetUrl(DEFAULT_MEET_URL);
       setShowScheduleForm(false);
       await load();
     } catch (err) {

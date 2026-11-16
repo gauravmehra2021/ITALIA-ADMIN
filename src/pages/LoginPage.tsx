@@ -6,18 +6,11 @@ import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/platformApi';
 import './login.css';
 
-const DEMO_ACCOUNTS = [
-  { email: 'mentor@sseuropa.demo', role: 'Teacher (Mentor)', note: 'Courses, lessons & live class alerts' },
-  { email: 'staff@sseuropa.demo', role: 'Staff (Admissions)', note: 'Website enquiries & lead conversion' },
-  { email: 'admin@sseuropa.demo', role: 'Admin', note: 'Curriculum, teachers & student overview' },
-  { email: 'superadmin@sseuropa.demo', role: 'Super Admin', note: 'Platform governance & notifications' },
-];
-
 export function LoginPage() {
-  const { demoLogin, loginWithPassword, verifyOtp, loading } = useAuth();
+  const { loginWithPassword, verifyOtp, loading } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('mentor@sseuropa.demo');
-  const [password, setPassword] = useState('Demo@12345');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [otpHint, setOtpHint] = useState<string | null>(null);
@@ -70,18 +63,6 @@ export function LoginPage() {
     }
   }
 
-  async function onDemo(selected?: string) {
-    setError(null);
-    setInfo(null);
-    try {
-      await demoLogin(selected ?? email);
-      setInfo('Signed in with demonstration-only authentication.');
-      navigate('/app');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Demo login failed');
-    }
-  }
-
   async function onPasswordLogin(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -91,12 +72,12 @@ export function LoginPage() {
       if (result.requiresOtp && result.pendingUserId) {
         setPendingUserId(result.pendingUserId);
         setOtpHint(result.demoOtpHint ?? null);
-        setInfo('OTP required. Use the demonstration OTP shown below.');
+        setInfo('OTP required. Please enter the verification code.');
         return;
       }
       navigate('/app');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
     }
   }
 
@@ -136,22 +117,7 @@ export function LoginPage() {
           {error && <ErrorBox message={error} />}
           {info && <SuccessBox message={info} />}
 
-          <div className="demo-grid">
-            {DEMO_ACCOUNTS.map((a) => (
-              <button
-                key={a.email}
-                type="button"
-                className="demo-tile"
-                disabled={loading}
-                onClick={() => void onDemo(a.email)}
-              >
-                <strong>{a.role}</strong>
-                <span>{a.note}</span>
-              </button>
-            ))}
-          </div>
 
-          <div className="login-divider"><span>or continue with credentials</span></div>
 
           {isForgot ? (
             !resetChallengeId ? (

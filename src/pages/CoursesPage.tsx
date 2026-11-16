@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Empty, ErrorBox, Loading, SuccessBox } from '../components/StateBlock';
 import { useAuth } from '../hooks/useAuth';
-import { coursesApi, subscriptionsApi } from '../services/platformApi';
+import { coursesApi } from '../services/platformApi';
 import { levelLabel, statusLabel, type Course } from '../types';
 
 export function CoursesPage() {
@@ -19,7 +19,7 @@ export function CoursesPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await coursesApi.list({ search: q || undefined, pageSize: 20, sortBy: 'title' });
+      const result = await coursesApi.list({ search: q || undefined, pageSize: 50, sortBy: 'createdAt', sortDescending: true });
       setCourses(result.items);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load courses');
@@ -44,38 +44,35 @@ export function CoursesPage() {
     }
   }
 
-  async function subscribe(id: string) {
-    setMessage(null);
-    setError(null);
-    try {
-      const sub = await subscriptionsApi.create(id, 'Monthly Plan');
-      setMessage(`Mock PayPal subscription activated (${sub.payPalSubscriptionId}).`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Subscription failed');
-    }
-  }
-
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formElement = e.currentTarget;
+    const form = new FormData(formElement);
     setError(null);
     setMessage(null);
     try {
-      await coursesApi.create({
+      const created = await coursesApi.create({
         title: form.get('title'),
         description: form.get('description'),
         level: Number(form.get('level')),
-        capacity: Number(form.get('capacity')),
+        capacity: 9999,
         mentorId: null,
         language: 'Italian',
-        price: Number(form.get('price')),
+        price: 0,
         currency: 'EUR',
-        durationWeeks: Number(form.get('durationWeeks')),
+        durationWeeks: 0,
+        thumbnailUrl: form.get('thumbnailUrl')?.toString().trim() || undefined,
       });
-      setMessage('Course created as draft.');
+      setMessage('Course created successfully.');
       setCreating(false);
-      e.currentTarget.reset();
+      if (created && created.id) {
+        setCourses((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+      }
+      try {
+        formElement.reset();
+      } catch {
+        // safely ignore
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed');
@@ -87,13 +84,27 @@ export function CoursesPage() {
       <div className="page-header">
         <div>
           <h1>Course Curriculum & Catalogue</h1>
-          <p>Create and edit courses, author lesson materials (videos, audios, PDFs), and manage student capacity.</p>
+          <p>Create and manage courses and chapters. All courses are included in the single App All-Access Membership.</p>
         </div>
         {(hasRole('Admin') || hasRole('SuperAdmin') || hasRole('Mentor')) && (
           <button className="btn btn-primary" type="button" onClick={() => setCreating((v) => !v)}>
             {creating ? 'Close form' : '+ New course'}
           </button>
         )}
+      </div>
+
+      <div className="panel" style={{ marginBottom: '1.25rem', borderLeft: '4px solid #0D5C75' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>💎 Single All-Access App Membership</h2>
+            <p style={{ color: 'var(--muted)', margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+              Students make one single payment to unlock every course, video tutorial, and live session across the app.
+            </p>
+          </div>
+          <span className="badge badge-success" style={{ padding: '0.35rem 0.75rem', fontWeight: 600 }}>
+            All Courses Included in 1 Payment
+          </span>
+        </div>
       </div>
 
       {message && <SuccessBox message={message} />}
@@ -117,8 +128,14 @@ export function CoursesPage() {
       {creating && (
         <form className="panel" style={{ marginBottom: '1rem' }} onSubmit={onCreate}>
           <h2 style={{ marginBottom: '0.75rem' }}>Create course</h2>
+          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.85rem' }}>
+            Enter course details. Courses are unlimited capacity and included in the full app pass.
+          </p>
           <div className="grid-2">
-            <div className="field"><label>Title</label><input name="title" required /></div>
+            <div className="field">
+              <label>Course Title</label>
+              <input name="title" placeholder="e.g. Italian Essentials A1" required />
+            </div>
             <div className="field">
               <label>Level</label>
               <select name="level" defaultValue={0}>
@@ -128,13 +145,15 @@ export function CoursesPage() {
               </select>
             </div>
           </div>
-          <div className="field"><label>Description</label><textarea name="description" rows={3} required /></div>
-          <div className="grid-3">
-            <div className="field"><label>Capacity</label><input name="capacity" type="number" defaultValue={25} required /></div>
-            <div className="field"><label>Price (€)</label><input name="price" type="number" defaultValue={49} required /></div>
-            <div className="field"><label>Weeks</label><input name="durationWeeks" type="number" defaultValue={8} required /></div>
+          <div className="field">
+            <label>Thumbnail / Image URL (Optional)</label>
+            <input name="thumbnailUrl" placeholder="https://example.com/course-cover.jpg or leave blank" />
           </div>
-          <button className="btn btn-azure" type="submit">Save draft</button>
+          <div className="field">
+            <label>Description</label>
+            <textarea name="description" rows={3} placeholder="Overview of the course topics, chapters, and practical tasks..." required />
+          </div>
+          <button className="btn btn-azure" type="submit">Save Course</button>
         </form>
       )}
 
@@ -154,13 +173,12 @@ export function CoursesPage() {
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
                 <span className="badge">{statusLabel(course.status)}</span>
                 <span className="badge">{course.language}</span>
-                <span className="badge">€{course.price}</span>
-                <span className="badge">{course.enrolledCount}/{course.capacity} enrolled</span>
+                <span className="badge badge-success">All-Access Included</span>
+                <span className="badge">{course.enrolledCount} active students</span>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <Link className="btn btn-secondary" to={`/app/courses/${course.id}`}>Open</Link>
                 <button className="btn btn-primary" type="button" onClick={() => void enroll(course.id)}>Enroll</button>
-                <button className="btn btn-azure" type="button" onClick={() => void subscribe(course.id)}>Subscribe (mock)</button>
               </div>
             </article>
           ))}

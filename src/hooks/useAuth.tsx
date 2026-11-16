@@ -70,11 +70,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithPassword = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      return await authApi.login(email, password);
+      const auth = await authApi.login(email, password);
+      if (!auth.requiresOtp) {
+        applyAuth(auth);
+      }
+      return auth;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyAuth]);
 
   const verifyOtp = useCallback(async (userId: string, code: string) => {
     setLoading(true);

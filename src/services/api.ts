@@ -23,7 +23,7 @@ export async function apiRequest<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  if (!headers.has('Content-Type') && options.body) {
+  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   const token = getToken();
@@ -53,6 +53,8 @@ export const api = {
   get: <T>(path: string) => apiRequest<T>(path),
   post: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  postForm: <T>(path: string, formData: FormData) =>
+    apiRequest<T>(path, { method: 'POST', body: formData }),
   put: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),

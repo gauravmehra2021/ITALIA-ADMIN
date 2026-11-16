@@ -445,6 +445,13 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteFirstName, setInviteFirstName] = useState('');
+  const [inviteLastName, setInviteLastName] = useState('');
+  const [inviteRole, setInviteRole] = useState<'1' | '2' | '3'>('1'); // 1 = Mentor, 2 = Staff, 3 = Admin
+  const [invitePassword, setInvitePassword] = useState('SSEuropa@2026');
+  const [submittingInvite, setSubmittingInvite] = useState(false);
 
   async function load() {
     try {
@@ -460,6 +467,32 @@ export function UsersPage() {
     void load();
   }, []);
 
+  async function handleInviteUser(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setMessage(null);
+    setSubmittingInvite(true);
+    try {
+      await usersApi.create({
+        email: inviteEmail.trim(),
+        firstName: inviteFirstName.trim(),
+        lastName: inviteLastName.trim(),
+        role: Number(inviteRole),
+        password: invitePassword,
+      });
+      setMessage(`New account created for ${inviteFirstName} ${inviteLastName}! Onboarding invitation email dispatched.`);
+      setShowInviteModal(false);
+      setInviteEmail('');
+      setInviteFirstName('');
+      setInviteLastName('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create user account');
+    } finally {
+      setSubmittingInvite(false);
+    }
+  }
+
   async function toggleStatus(u: User) {
     setError(null);
     setMessage(null);
@@ -470,6 +503,36 @@ export function UsersPage() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update user status');
+    }
+  }
+
+  async function handleSoftDelete(u: User) {
+    if (u.isProtectedSuperAdmin) {
+      alert('This is a protected permanent Super Administrator account and cannot be deleted.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to deactivate and soft-delete user '${u.fullName}'? They will no longer be able to log in.`)) return;
+
+    setError(null);
+    setMessage(null);
+    try {
+      await usersApi.softDelete(u.id);
+      setMessage(`User ${u.fullName} has been deactivated (soft deleted).`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to soft delete user');
+    }
+  }
+
+  async function handleRestore(u: User) {
+    setError(null);
+    setMessage(null);
+    try {
+      await usersApi.restore(u.id);
+      setMessage(`User ${u.fullName} has been restored to active status.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to restore user');
     }
   }
 
@@ -493,10 +556,64 @@ export function UsersPage() {
       <div className="page-header">
         <div>
           <h1>Users & Roles Directory</h1>
-          <p>Admin directory of platform accounts. Manage user roles, access statuses, and active permissions.</p>
+          <p>SuperAdmin & Administrator control panel. Create staff roles, manage permissions, and govern access with soft-delete protection.</p>
         </div>
+        <button
+          className="btn btn-primary"
+          type="button"
+          onClick={() => setShowInviteModal((v) => !v)}
+        >
+          {showInviteModal ? 'Close Form' : '+ Create / Invite Staff & Mentors'}
+        </button>
       </div>
+
       {message && <SuccessBox message={message} />}
+
+      {showInviteModal && (
+        <form className="panel" onSubmit={handleInviteUser} style={{ marginBottom: '1.25rem', border: '1px solid var(--azure)' }}>
+          <h2>Create Platform Staff / Teacher Account</h2>
+          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+            The created user will receive an onboarding email invitation with credentials to log in to the SS Europa Management Portal.
+          </p>
+          <div className="grid-2">
+            <div className="field">
+              <label>First Name</label>
+              <input value={inviteFirstName} onChange={(e) => setInviteFirstName(e.target.value)} required placeholder="e.g. Matteo" />
+            </div>
+            <div className="field">
+              <label>Last Name</label>
+              <input value={inviteLastName} onChange={(e) => setInviteLastName(e.target.value)} required placeholder="e.g. Ricci" />
+            </div>
+          </div>
+          <div className="grid-3">
+            <div className="field">
+              <label>Email Address</label>
+              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required placeholder="mentor@sseuropa.com" />
+            </div>
+            <div className="field">
+              <label>Assigned Role</label>
+              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as '1' | '2' | '3')}>
+                <option value="1">Mentor / Teacher</option>
+                <option value="2">Staff (Admissions / Operations)</option>
+                <option value="3">Administrator</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Temporary Password</label>
+              <input value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} required placeholder="SSEuropa@2026" />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button className="btn btn-primary" type="submit" disabled={submittingInvite}>
+              {submittingInvite ? 'Creating & Sending Email…' : 'Create Account & Send Invite'}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={() => setShowInviteModal(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       <div className="panel">
         <table className="table">
           <thead>
@@ -510,12 +627,25 @@ export function UsersPage() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id}>
-                <td><strong>{u.fullName}</strong></td>
+              <tr key={u.id} style={{ opacity: u.isDeleted ? 0.6 : 1 }}>
+                <td>
+                  <strong>{u.fullName}</strong>
+                  {u.isProtectedSuperAdmin && (
+                    <span style={{ marginLeft: 6, fontSize: '0.75rem', background: 'rgba(212, 175, 55, 0.2)', color: '#d4af37', padding: '2px 6px', borderRadius: 4 }}>
+                      🛡️ Protected SuperAdmin
+                    </span>
+                  )}
+                  {u.isDeleted && (
+                    <span style={{ marginLeft: 6, fontSize: '0.75rem', background: 'rgba(230, 57, 70, 0.2)', color: '#e63946', padding: '2px 6px', borderRadius: 4 }}>
+                      Soft Deleted
+                    </span>
+                  )}
+                </td>
                 <td>{u.email}</td>
                 <td>
                   <select
                     value={u.role}
+                    disabled={u.isProtectedSuperAdmin}
                     onChange={(e) => void changeRole(u, e.target.value)}
                     style={{
                       padding: '0.25rem 0.5rem',
@@ -533,19 +663,51 @@ export function UsersPage() {
                   </select>
                 </td>
                 <td>
-                  <span className="badge">
+                  <span className={`badge ${u.status === 'Active' ? 'badge-success' : 'badge-warn'}`}>
                     {u.status}
                   </span>
                 </td>
                 <td>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
-                    onClick={() => void toggleStatus(u)}
-                  >
-                    {u.status === 'Active' ? 'Suspend' : 'Activate'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                      disabled={u.isProtectedSuperAdmin}
+                      onClick={() => void toggleStatus(u)}
+                    >
+                      {u.status === 'Active' ? 'Suspend' : 'Activate'}
+                    </button>
+
+                    {u.isDeleted ? (
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                        onClick={() => void handleRestore(u)}
+                      >
+                        Restore
+                      </button>
+                    ) : (
+                      !u.isProtectedSuperAdmin && (
+                        <button
+                          type="button"
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(230,57,70,0.4)',
+                            color: '#e63946',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.78rem',
+                            padding: '0.25rem 0.6rem',
+                          }}
+                          onClick={() => void handleSoftDelete(u)}
+                        >
+                          Soft Delete
+                        </button>
+                      )
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

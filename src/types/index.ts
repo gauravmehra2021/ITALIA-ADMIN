@@ -28,6 +28,8 @@ export interface User {
   status: string;
   preferredLanguage: string;
   emailVerified: boolean;
+  isDeleted?: boolean;
+  isProtectedSuperAdmin?: boolean;
 }
 
 export interface AuthResponse {
@@ -55,6 +57,7 @@ export interface Course {
   price: number;
   currency: string;
   thumbnailUrl?: string | null;
+  paymentUrl?: string | null;
   durationWeeks: number;
   createdAtUtc: string;
 }
@@ -82,6 +85,49 @@ export interface Material {
   isProtected: boolean;
   sortOrder: number;
   accessUrl?: string | null;
+  chapterTitle?: string;
+  chapterNumber?: number;
+  videoUrl?: string | null;
+  audioUrl?: string | null;
+  pdfUrl?: string | null;
+  contentText?: string | null;
+  practicalTask?: string | null;
+  durationMinutes?: number;
+}
+
+export interface Assignment {
+  id: string;
+  courseId: string;
+  chapterTitle: string;
+  title: string;
+  description: string;
+  referenceFileUrl?: string | null;
+  dueDateUtc?: string | null;
+  totalMarks: number;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  submissionText?: string | null;
+  submissionFileUrl?: string | null;
+  submittedAtUtc: string;
+  marksObtained?: number | null;
+  teacherFeedback?: string | null;
+  gradedAtUtc?: string | null;
+  status: string;
+}
+
+export interface FileUploadResponse {
+  url: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
 }
 
 export interface Assessment {

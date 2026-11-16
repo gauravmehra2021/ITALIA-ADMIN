@@ -101,7 +101,7 @@ export function LandingPage() {
             <h2>Built as one continuous learning journey</h2>
             <p>
               From first login to certificate, every step is authorized on the server —
-              enrollment, class access, materials, assessments, and AI practice.
+              enrollment, class access, materials, assignments, and AI practice.
             </p>
           </div>
 

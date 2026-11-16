@@ -4,6 +4,8 @@ import type {
   AiResponse,
   Announcement,
   Assessment,
+  Assignment,
+  AssignmentSubmission,
   AuditLog,
   AuthResponse,
   Certificate,
@@ -12,6 +14,7 @@ import type {
   CreateEnquiryRequest,
   DashboardStats,
   Enquiry,
+  FileUploadResponse,
   Material,
   MentorDashboard,
   NotificationItem,
@@ -61,12 +64,13 @@ export const authApi = {
 };
 
 export const coursesApi = {
-  list: (params: { page?: number; pageSize?: number; search?: string; sortBy?: string } = {}) => {
+  list: (params: { page?: number; pageSize?: number; search?: string; sortBy?: string; sortDescending?: boolean } = {}) => {
     const q = new URLSearchParams();
     q.set('page', String(params.page ?? 1));
-    q.set('pageSize', String(params.pageSize ?? 12));
+    q.set('pageSize', String(params.pageSize ?? 50));
     if (params.search) q.set('search', params.search);
     if (params.sortBy) q.set('sortBy', params.sortBy);
+    if (params.sortDescending !== undefined) q.set('sortDescending', String(params.sortDescending));
     return api.get<PagedResult<Course>>(`/api/courses?${q}`);
   },
   get: (id: string) => api.get<Course>(`/api/courses/${id}`),
@@ -153,12 +157,49 @@ export const dashboardApi = {
   staff: () => api.get<StaffDashboard>('/api/dashboard/staff'),
 };
 
+export const mediaApi = {
+  upload: (file: File, category?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (category) formData.append('category', category);
+    return api.postForm<FileUploadResponse>('/api/media/upload', formData);
+  },
+};
+
+export const assignmentsApi = {
+  byCourse: (courseId: string) => api.get<Assignment[]>(`/api/assignments/course/${courseId}`),
+  get: (id: string) => api.get<Assignment>(`/api/assignments/${id}`),
+  create: (data: {
+    courseId: string;
+    chapterTitle: string;
+    title: string;
+    description: string;
+    referenceFileUrl?: string;
+    dueDateUtc?: string;
+    totalMarks: number;
+  }) => api.post<Assignment>('/api/assignments', data),
+  delete: (id: string) => api.delete(`/api/assignments/${id}`),
+  submissions: (id: string) => api.get<AssignmentSubmission[]>(`/api/assignments/${id}/submissions`),
+  grade: (submissionId: string, data: { marksObtained: number; teacherFeedback?: string }) =>
+    api.post<AssignmentSubmission>(`/api/assignments/submissions/${submissionId}/grade`, data),
+};
+
 export const usersApi = {
   list: () => api.get<User[]>('/api/users'),
   updateStatus: (id: string, isActive: boolean) =>
     api.put<User>(`/api/users/${id}/status`, { isActive }),
   updateRole: (id: string, role: number | string) =>
     api.put<User>(`/api/users/${id}/role`, { role: Number(role) }),
+  create: (data: {
+    email: string;
+    password?: string;
+    firstName: string;
+    lastName: string;
+    role: string | number;
+    phoneNumber?: string;
+  }) => api.post<User>('/api/users', data),
+  softDelete: (id: string) => api.delete(`/api/users/${id}`),
+  restore: (id: string) => api.post(`/api/users/${id}/restore`),
 };
 
 export const auditApi = {
