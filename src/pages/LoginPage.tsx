@@ -111,7 +111,43 @@ export function LoginPage() {
           </p>
 
           <div style={{ background: 'rgba(13, 92, 117, 0.1)', border: '1px solid rgba(13, 92, 117, 0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text)' }}>
-            📱 <strong>Student Access:</strong> Students log in and take courses via the <strong>SS Europa React Native Mobile App</strong>. This portal is for Teachers, Admissions Staff, and Admins.
+            🛡️ <strong>Admin Portal:</strong> Use the quick buttons below or enter your admin credentials.
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
+              onClick={() => {
+                setEmail('superadmin@sseuropa.demo');
+                setPassword('Demo@12345');
+              }}
+            >
+              👑 SuperAdmin
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
+              onClick={() => {
+                setEmail('admin@sseuropa.demo');
+                setPassword('Demo@12345');
+              }}
+            >
+              🛡️ Admin (Demo)
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
+              onClick={() => {
+                setEmail('admin@sseuropa.com');
+                setPassword('Admin@SSEuropa2026!');
+              }}
+            >
+              🏢 Root Admin
+            </button>
           </div>
 
           {error && <ErrorBox message={error} />}
