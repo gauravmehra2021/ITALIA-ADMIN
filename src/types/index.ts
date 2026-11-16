@@ -60,6 +60,52 @@ export interface Course {
   paymentUrl?: string | null;
   durationWeeks: number;
   createdAtUtc: string;
+  slug?: string;
+  shortDescription?: string;
+  objectives?: string;
+  displayOrder?: number;
+  modulesCount?: number;
+  lessonsCount?: number;
+}
+
+export interface CourseStats {
+  totalCourses: number;
+  publishedCourses: number;
+  draftCourses: number;
+  totalModules: number;
+  totalLessons: number;
+  totalEnrolled: number;
+}
+
+export interface PresignedUploadResponse {
+  uploadUrl: string;
+  objectKey: string;
+  bucketName: string;
+  region: string;
+  expiresAtUtc: string;
+  isDirectUpload: boolean;
+  uploadId?: string | null;
+}
+
+export interface ConfirmUploadResponse {
+  resourceId: string;
+  objectKey: string;
+  accessUrl: string;
+  message: string;
+}
+
+export interface ModuleItem {
+  id: string;
+  title: string;
+  number: number;
+  chapters: ChapterItem[];
+}
+
+export interface ChapterItem {
+  id: string;
+  title: string;
+  number: number;
+  lessons: Material[];
 }
 
 export interface ClassSession {

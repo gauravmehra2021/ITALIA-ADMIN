@@ -1,12 +1,9 @@
-import type { FormEvent, ChangeEvent } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Empty, ErrorBox, Loading, SuccessBox } from '../components/StateBlock';
-import { useAuth } from '../hooks/useAuth';
-import { assignmentsApi, coursesApi, materialsApi, mediaApi } from '../services/platformApi';
+import { S3Uploader } from '../components/S3Uploader';
+import { assignmentsApi, coursesApi, materialsApi } from '../services/platformApi';
 import {
-  levelLabel,
-  statusLabel,
   type Assignment,
   type AssignmentSubmission,
   type Course,
@@ -15,51 +12,56 @@ import {
 
 export function CourseDetailPage() {
   const { id } = useParams();
-  const { hasRole } = useAuth();
   const [course, setCourse] = useState<Course | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // Active Tab: Curriculum | Assignments & Grading | Preview
+  const [activeTab, setActiveTab] = useState<'curriculum' | 'assignments' | 'settings'>('curriculum');
+
+  // Hierarchy Structure Builder
+  const [moduleTitle, setModuleTitle] = useState('Modulo 1: Primi Passi in Italia');
+  const [moduleNumber] = useState<number>(1);
+  const [chapterTitle, setChapterTitle] = useState('Capitolo 1: I Saluti & Presentazioni');
+  const [chapterNumber] = useState<number>(1);
+
+  // New Lesson State
+  const [showAddLesson, setShowAddLesson] = useState(false);
+  const [lessonTitle, setLessonTitle] = useState('');
+  const [lessonDesc, setLessonDesc] = useState('');
+  const [lessonType, setLessonType] = useState<number>(1); // 1=Video, 2=Audio, 0=PDF, 3=Worksheet
+  const [durationMinutes] = useState<number>(15);
+  const [isFreePreview, setIsFreePreview] = useState(false);
+  const [lessonSortOrder] = useState<number>(1);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoObjectKey, setVideoObjectKey] = useState('');
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [pdfObjectKey, setPdfObjectKey] = useState('');
+  const [audioUrl, setAudioUrl] = useState('');
+  const [audioObjectKey, setAudioObjectKey] = useState('');
+  const [contentText, setContentText] = useState('');
+  const [practicalTask, setPracticalTask] = useState('');
+  const [savingLesson, setSavingLesson] = useState(false);
+
+  // Assignment Modal & Grading State
+  const [showAddAssignment, setShowAddAssignment] = useState(false);
+  const [assignTitle, setAssignTitle] = useState('');
+  const [assignDesc, setAssignDesc] = useState('');
+  const [assignTotalMarks, setAssignTotalMarks] = useState<number>(100);
+  const [assignRefFile, setAssignRefFile] = useState('');
+  const [submittingAssign, setSubmittingAssign] = useState(false);
+
   const [selectedAssignmentSubs, setSelectedAssignmentSubs] = useState<{
     assignment: Assignment;
     submissions: AssignmentSubmission[];
   } | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Lesson Form State
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [chapterTitle, setChapterTitle] = useState('Chapter 1: Foundations');
-  const [chapterNumber, setChapterNumber] = useState<number>(1);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newType, setNewType] = useState<number>(1); // 1 = Video, 2 = Audio, 0 = PDF, 3 = Worksheet
-  const [newSortOrder, setNewSortOrder] = useState<number>(1);
-  const [durationMinutes, setDurationMinutes] = useState<number>(15);
-  const [videoUrl, setVideoUrl] = useState('');
-  const [audioUrl, setAudioUrl] = useState('');
-  const [pdfUrl, setPdfUrl] = useState('');
-  const [contentText, setContentText] = useState('');
-  const [practicalTask, setPracticalTask] = useState('');
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [uploadProgressMsg, setUploadProgressMsg] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Assignment Form State
-  const [showAddAssignment, setShowAddAssignment] = useState(false);
-  const [assignChapter, setAssignChapter] = useState('Chapter 1: Practical Assignments');
-  const [assignTitle, setAssignTitle] = useState('');
-  const [assignDesc, setAssignDesc] = useState('');
-  const [assignRefFile, setAssignRefFile] = useState('');
-  const [assignDueDate, setAssignDueDate] = useState('');
-  const [assignTotalMarks, setAssignTotalMarks] = useState<number>(100);
-  const [submittingAssign, setSubmittingAssign] = useState(false);
-
-  // Grading Modal State
   const [gradingSub, setGradingSub] = useState<AssignmentSubmission | null>(null);
-  const [gradeMarks, setGradeMarks] = useState<number>(85);
-  const [gradeFeedback, setGradeFeedback] = useState('Excellent work. Keep practicing!');
+  const [gradeMarks, setGradeMarks] = useState<number>(90);
+  const [gradeFeedback, setGradeFeedback] = useState('Ottimo lavoro! Good grammar usage.');
   const [submittingGrade, setSubmittingGrade] = useState(false);
 
   async function loadData() {
@@ -67,20 +69,17 @@ export function CourseDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const c = await coursesApi.get(id);
-      setCourse(c);
-      try {
-        setMaterials(await materialsApi.byCourse(id));
-      } catch {
-        setMaterials([]);
-      }
-      try {
-        setAssignments(await assignmentsApi.byCourse(id));
-      } catch {
-        setAssignments([]);
-      }
+      const [cRes, mRes, aRes] = await Promise.allSettled([
+        coursesApi.get(id),
+        materialsApi.byCourse(id),
+        assignmentsApi.byCourse(id),
+      ]);
+
+      if (cRes.status === 'fulfilled') setCourse(cRes.value);
+      if (mRes.status === 'fulfilled') setMaterials(mRes.value);
+      if (aRes.status === 'fulfilled') setAssignments(aRes.value);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load course');
+      setError(e instanceof Error ? e.message : 'Failed to load course details');
     } finally {
       setLoading(false);
     }
@@ -90,48 +89,45 @@ export function CourseDetailPage() {
     void loadData();
   }, [id]);
 
-  async function handleFileUpload(e: ChangeEvent<HTMLInputElement>, targetField: 'video' | 'audio' | 'pdf' | 'ref') {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const category = targetField === 'video' ? 'videos' : targetField === 'audio' ? 'audios' : 'documents';
-    setUploadingFile(true);
-    setUploadProgressMsg(`Uploading ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)…`);
+  const handleTogglePublish = async () => {
+    if (!course) return;
     setError(null);
-
+    setMessage(null);
     try {
-      const res = await mediaApi.upload(file, category);
-      if (targetField === 'video') setVideoUrl(res.url);
-      else if (targetField === 'audio') setAudioUrl(res.url);
-      else if (targetField === 'pdf') setPdfUrl(res.url);
-      else if (targetField === 'ref') setAssignRefFile(res.url);
-
-      setUploadProgressMsg(`✓ ${file.name} uploaded successfully!`);
+      const isPublished = course.status === 1 || course.status === 'Published';
+      if (isPublished) {
+        await coursesApi.unpublish(course.id);
+        setMessage(`Course "${course.title}" moved to Draft. It is now hidden from students.`);
+      } else {
+        await coursesApi.publish(course.id);
+        setMessage(`Course "${course.title}" published! Live on Student Portal.`);
+      }
+      await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Media upload failed');
-      setUploadProgressMsg(null);
-    } finally {
-      setUploadingFile(false);
+      setError(err instanceof Error ? err.message : 'Publish status update failed');
     }
-  }
+  };
 
-  async function handleAddMaterial(e: FormEvent) {
+  const handleCreateLesson = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id) return;
-    setSubmitting(true);
+    if (!id || !lessonTitle.trim()) return;
+    setSavingLesson(true);
     setError(null);
     setMessage(null);
 
     try {
       await materialsApi.create({
         courseId: id,
-        title: newTitle.trim(),
-        description: newDescription.trim(),
-        type: Number(newType),
-        sortOrder: Number(newSortOrder),
+        title: lessonTitle.trim(),
+        description: lessonDesc.trim(),
+        type: Number(lessonType),
+        sortOrder: Number(lessonSortOrder),
+        moduleTitle: moduleTitle.trim(),
+        moduleNumber: Number(moduleNumber),
         chapterTitle: chapterTitle.trim(),
         chapterNumber: Number(chapterNumber),
         durationMinutes: Number(durationMinutes),
+        isFreePreview,
         videoUrl: videoUrl.trim() || null,
         audioUrl: audioUrl.trim() || null,
         pdfUrl: pdfUrl.trim() || null,
@@ -139,698 +135,781 @@ export function CourseDetailPage() {
         practicalTask: practicalTask.trim() || null,
       });
 
-      setMessage('New lesson content added successfully! Synced across Admin & Mobile App.');
-      setNewTitle('');
-      setNewDescription('');
+      setMessage(`✓ Lesson "${lessonTitle}" created and saved to curriculum.`);
+      setLessonTitle('');
+      setLessonDesc('');
       setVideoUrl('');
-      setAudioUrl('');
+      setVideoObjectKey('');
       setPdfUrl('');
+      setPdfObjectKey('');
+      setAudioUrl('');
+      setAudioObjectKey('');
       setContentText('');
       setPracticalTask('');
-      setShowAddForm(false);
-      setUploadProgressMsg(null);
+      setShowAddLesson(false);
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add content');
+      setError(err instanceof Error ? err.message : 'Failed to add lesson');
     } finally {
-      setSubmitting(false);
+      setSavingLesson(false);
     }
-  }
+  };
 
-  async function handleDeleteMaterial(matId: string) {
-    if (!confirm('Are you sure you want to remove this lesson content?')) return;
+  const handleDeleteLesson = async (matId: string) => {
+    if (!confirm('Are you sure you want to delete this lesson?')) return;
     setError(null);
     setMessage(null);
     try {
       await materialsApi.delete(matId);
-      setMessage('Lesson content removed.');
+      setMessage('Lesson deleted.');
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete material');
+      setError(err instanceof Error ? err.message : 'Failed to delete lesson');
     }
-  }
+  };
 
-  async function handleCreateAssignment(e: FormEvent) {
+  const handleCreateAssignment = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || !assignTitle.trim()) return;
     setSubmittingAssign(true);
     setError(null);
     setMessage(null);
+
     try {
       await assignmentsApi.create({
         courseId: id,
-        chapterTitle: assignChapter.trim(),
+        chapterTitle: chapterTitle.trim(),
         title: assignTitle.trim(),
         description: assignDesc.trim(),
         referenceFileUrl: assignRefFile.trim() || undefined,
-        dueDateUtc: assignDueDate ? new Date(assignDueDate).toISOString() : undefined,
         totalMarks: Number(assignTotalMarks),
       });
 
-      setMessage('Practical Assignment created and assigned to students!');
-      setShowAddAssignment(false);
+      setMessage('Practical assignment created.');
       setAssignTitle('');
       setAssignDesc('');
       setAssignRefFile('');
+      setShowAddAssignment(false);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create assignment');
     } finally {
       setSubmittingAssign(false);
     }
-  }
+  };
 
-  async function handleOpenSubmissions(assign: Assignment) {
+  const handleOpenSubmissions = async (a: Assignment) => {
     setError(null);
     try {
-      const subs = await assignmentsApi.submissions(assign.id);
-      setSelectedAssignmentSubs({ assignment: assign, submissions: subs });
+      const subs = await assignmentsApi.submissions(a.id);
+      setSelectedAssignmentSubs({ assignment: a, submissions: subs });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load assignment submissions');
+      setError(err instanceof Error ? err.message : 'Failed to load submissions');
     }
-  }
+  };
 
-  async function handleGradeSubmission(e: FormEvent) {
+  const handleSaveGrade = async (e: FormEvent) => {
     e.preventDefault();
     if (!gradingSub) return;
     setSubmittingGrade(true);
     setError(null);
+    setMessage(null);
+
     try {
       await assignmentsApi.grade(gradingSub.id, {
         marksObtained: Number(gradeMarks),
-        teacherFeedback: gradeFeedback,
+        teacherFeedback: gradeFeedback.trim(),
       });
-
-      setMessage(`Submission graded (${gradeMarks}/100). Student notified via email.`);
+      setMessage('Grade and feedback saved and dispatched to student.');
       setGradingSub(null);
       if (selectedAssignmentSubs) {
-        const updatedSubs = await assignmentsApi.submissions(selectedAssignmentSubs.assignment.id);
-        setSelectedAssignmentSubs({ ...selectedAssignmentSubs, submissions: updatedSubs });
+        await handleOpenSubmissions(selectedAssignmentSubs.assignment);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to grade submission');
+      setError(err instanceof Error ? err.message : 'Grading failed');
     } finally {
       setSubmittingGrade(false);
     }
-  }
-
-  const canManage = hasRole('Mentor') || hasRole('Admin') || hasRole('SuperAdmin');
-
-  if (loading) return <Loading />;
-  if (error && !course) return <ErrorBox message={error} />;
-  if (!course) return <Empty label="Course not found." />;
-
-  const getMaterialIcon = (type: string | number) => {
-    const t = Number(type);
-    switch (t) {
-      case 1: return '🎬 Video Lecture';
-      case 2: return '🎧 Audio Guide';
-      case 0: return '📄 PDF Document';
-      case 3: return '📝 Practical Task';
-      default: return '📁 Resource';
-    }
   };
 
-  // Group materials by Chapter
-  const groupedMaterials = materials.reduce((acc, m) => {
-    const chName = m.chapterTitle || `Chapter ${m.chapterNumber || 1}`;
-    if (!acc[chName]) acc[chName] = [];
-    acc[chName].push(m);
-    return acc;
-  }, {} as Record<string, Material[]>);
+  if (loading) return <Loading label="Loading course curriculum & content hierarchy…" />;
+  if (!course) return <ErrorBox message="Course not found" />;
+
+  const isPublished = course.status === 1 || course.status === 'Published';
+
+  // Group materials into Modules -> Chapters -> Lessons
+  const moduleMap: Record<string, Record<string, Material[]>> = {};
+
+  materials.forEach((mat) => {
+    const modKey = mat.chapterTitle?.includes('Modulo') ? mat.chapterTitle.split(':')[0] : 'Modulo 1';
+    const chapKey = mat.chapterTitle || 'Capitolo 1';
+
+    if (!moduleMap[modKey]) moduleMap[modKey] = {};
+    if (!moduleMap[modKey][chapKey]) moduleMap[modKey][chapKey] = [];
+    moduleMap[modKey][chapKey].push(mat);
+  });
 
   return (
-    <div className="animate-rise">
-      <div className="page-header">
-        <div>
-          <h1>{course.title}</h1>
-          <p>{course.description}</p>
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Breadcrumb & Navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Link to="/app/courses" style={{ color: 'var(--muted)', fontWeight: 600 }}>
+            ← Back to Courses
+          </Link>
+          <span style={{ color: 'var(--border)' }}>/</span>
+          <span style={{ fontWeight: 800, color: 'var(--text)', fontSize: '1.1rem' }}>
+            {course.title}
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {canManage && (
-            <>
-              <button className="btn btn-primary" type="button" onClick={() => setShowAddForm((v) => !v)}>
-                {showAddForm ? 'Close Lesson Form' : '+ Add Chapter Lesson'}
-              </button>
-              <button className="btn btn-azure" type="button" onClick={() => setShowAddAssignment((v) => !v)}>
-                {showAddAssignment ? 'Close Assignment Form' : '+ Add Practical Assignment'}
-              </button>
-            </>
-          )}
-          <Link className="btn btn-secondary" to="/app/courses">Back to courses</Link>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <span
+            className="badge"
+            style={{
+              background: isPublished ? '#dcfce7' : '#fef3c7',
+              color: isPublished ? '#15803d' : '#b45309',
+              fontWeight: 700,
+              padding: '6px 12px',
+            }}
+          >
+            {isPublished ? '🟢 Published (Live for Students)' : '🟡 Draft (Hidden from Students)'}
+          </span>
+
+          <button
+            type="button"
+            onClick={handleTogglePublish}
+            className={isPublished ? 'btn btn-secondary' : 'btn btn-primary'}
+            style={{ fontSize: '0.85rem' }}
+          >
+            {isPublished ? '📥 Move to Draft' : '🚀 Publish Course Live'}
+          </button>
         </div>
       </div>
 
-      {message && <SuccessBox message={message} />}
       {error && <ErrorBox message={error} />}
+      {message && <SuccessBox message={message} />}
 
-      <div className="grid-4" style={{ marginBottom: '1.25rem' }}>
-        <div className="stat"><span>Level</span><strong style={{ fontSize: '1.2rem' }}>{levelLabel(course.level)}</strong></div>
-        <div className="stat"><span>Status</span><strong style={{ fontSize: '1.2rem' }}>{statusLabel(course.status)}</strong></div>
-        <div className="stat"><span>Instructor</span><strong style={{ fontSize: '1.2rem' }}>{course.mentorName ?? 'Assigned Mentor'}</strong></div>
-        <div className="stat"><span>Total Chapters</span><strong style={{ fontSize: '1.2rem' }}>{Object.keys(groupedMaterials).length || 1}</strong></div>
+      {/* Tabs Header */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+        <button
+          onClick={() => setActiveTab('curriculum')}
+          className={activeTab === 'curriculum' ? 'btn btn-primary' : 'btn btn-secondary'}
+          style={{ padding: '8px 18px', fontSize: '0.9rem' }}
+        >
+          📚 Course Hierarchy & Content ({materials.length} Lessons)
+        </button>
+        <button
+          onClick={() => setActiveTab('assignments')}
+          className={activeTab === 'assignments' ? 'btn btn-primary' : 'btn btn-secondary'}
+          style={{ padding: '8px 18px', fontSize: '0.9rem' }}
+        >
+          ✍️ Practical Assignments ({assignments.length})
+        </button>
       </div>
 
-      {/* CREATE LESSON FORM */}
-      {showAddForm && canManage && (
-        <form className="panel" onSubmit={handleAddMaterial} style={{ marginBottom: '1.25rem', border: '1px solid var(--azure)' }}>
-          <h2>Add Lesson to Course (Modules / Chapters Flow)</h2>
-          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-            Author chapter lessons with multimedia. Upload video tutorials, native audio recordings, PDF workbook notes, explanations, and practical tasks.
-          </p>
-
-          <div className="grid-2">
-            <div className="field">
-              <label>Module / Chapter Title</label>
-              <input
-                value={chapterTitle}
-                onChange={(e) => setChapterTitle(e.target.value)}
-                placeholder="e.g. Chapter 1: Introduction & Fundamentals"
-                required
-              />
-            </div>
-            <div className="field">
-              <label>Chapter Sequence Number</label>
-              <input
-                type="number"
-                value={chapterNumber}
-                onChange={(e) => setChapterNumber(Number(e.target.value))}
-                min={1}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid-4">
-            <div className="field">
-              <label>Lesson Title</label>
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. Italian Alphabet & Pronunciation Lab"
-                required
-              />
-            </div>
-            <div className="field">
-              <label>Primary Content Type</label>
-              <select value={newType} onChange={(e) => setNewType(Number(e.target.value))}>
-                <option value={1}>🎬 Video Tutorial</option>
-                <option value={2}>🎧 Audio Listening / Pronunciation</option>
-                <option value={0}>📄 PDF / Notes Workbook</option>
-                <option value={3}>📝 Interactive Practical Task</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Duration (Mins)</label>
-              <input
-                type="number"
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                min={1}
-                required
-              />
-            </div>
-            <div className="field">
-              <label>Sort Order</label>
-              <input
-                type="number"
-                value={newSortOrder}
-                onChange={(e) => setNewSortOrder(Number(e.target.value))}
-                min={1}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Description & Learning Objectives</label>
-            <textarea
-              rows={2}
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-              placeholder="Summary of this lesson for the student..."
-              required
-            />
-          </div>
-
-          {/* MEDIA UPLOAD SECTION */}
-          <div style={{ background: 'var(--panel-2, rgba(255,255,255,0.03))', padding: '14px', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border)' }}>
-            <h3 style={{ margin: '0 0 8px', fontSize: '1rem' }}>Media Files & Video/Audio Storage</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '0 0 12px' }}>
-              Upload media files directly to the server. Files are automatically configured for fast HTTP 206 byte-range streaming on Mobile App and Admin Portal.
-            </p>
-
-            <div className="grid-3">
-              <div className="field">
-                <label>Upload Video (.mp4, .webm, .mov)</label>
-                <input
-                  type="file"
-                  accept="video/mp4,video/webm,video/quicktime"
-                  disabled={uploadingFile}
-                  onChange={(e) => void handleFileUpload(e, 'video')}
-                />
-                {videoUrl && <div style={{ fontSize: '0.8rem', color: 'var(--azure)', marginTop: 4 }}>✓ Video Attached</div>}
-              </div>
-
-              <div className="field">
-                <label>Upload Audio (.mp3, .wav, .m4a)</label>
-                <input
-                  type="file"
-                  accept="audio/mp3,audio/wav,audio/m4a,audio/mpeg"
-                  disabled={uploadingFile}
-                  onChange={(e) => void handleFileUpload(e, 'audio')}
-                />
-                {audioUrl && <div style={{ fontSize: '0.8rem', color: 'var(--azure)', marginTop: 4 }}>✓ Audio Attached</div>}
-              </div>
-
-              <div className="field">
-                <label>Upload PDF Notes / Workbook</label>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  disabled={uploadingFile}
-                  onChange={(e) => void handleFileUpload(e, 'pdf')}
-                />
-                {pdfUrl && <div style={{ fontSize: '0.8rem', color: 'var(--azure)', marginTop: 4 }}>✓ PDF Attached</div>}
-              </div>
+      {/* TAB 1: CURRICULUM HIERARCHY BUILDER */}
+      {activeTab === 'curriculum' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Top Bar with Add Lesson CTA */}
+          <div className="panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                Course Content Tree
+              </h2>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 0' }}>
+                Course → Modules → Chapters → Lessons → Activities. Upload videos and PDFs directly to AWS S3.
+              </p>
             </div>
 
-            {uploadProgressMsg && (
-              <div style={{ fontSize: '0.85rem', color: 'var(--azure)', marginTop: '8px' }}>
-                {uploadProgressMsg}
-              </div>
-            )}
-          </div>
-
-          <div className="grid-2">
-            <div className="field">
-              <label>Text Explanation / Comprehensive Notes</label>
-              <textarea
-                rows={3}
-                value={contentText}
-                onChange={(e) => setContentText(e.target.value)}
-                placeholder="In-depth textual explanation, vocabulary tables, rules..."
-              />
-            </div>
-            <div className="field">
-              <label>Practical Task for Student</label>
-              <textarea
-                rows={3}
-                value={practicalTask}
-                onChange={(e) => setPracticalTask(e.target.value)}
-                placeholder="Practical action item (e.g. Record 5 audio sentences, translate dialogue)..."
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button className="btn btn-primary" type="submit" disabled={submitting || uploadingFile}>
-              {submitting ? 'Publishing Lesson…' : 'Publish Chapter Lesson'}
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={() => setShowAddForm(false)}>
-              Cancel
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowAddLesson(!showAddLesson)}
+            >
+              {showAddLesson ? '✕ Close Lesson Builder' : '➕ Add Lesson to Curriculum'}
             </button>
           </div>
-        </form>
-      )}
 
-      {/* CREATE ASSIGNMENT FORM */}
-      {showAddAssignment && canManage && (
-        <form className="panel" onSubmit={handleCreateAssignment} style={{ marginBottom: '1.25rem', border: '1px solid #d4af37' }}>
-          <h2>Add Practical Assignment for Students</h2>
-          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-            Students will submit practical work via their mobile app, which mentors can review, grade, and provide personalized feedback on.
-          </p>
+          {/* Add Lesson Form Panel */}
+          {showAddLesson && (
+            <div className="panel" style={{ borderLeft: '4px solid #0284c7', background: '#f8fafc' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '1rem', color: '#0369a1' }}>
+                Create Lesson & Upload Media to AWS S3
+              </h3>
 
-          <div className="grid-2">
-            <div className="field">
-              <label>Associated Chapter</label>
-              <input value={assignChapter} onChange={(e) => setAssignChapter(e.target.value)} required />
-            </div>
-            <div className="field">
-              <label>Assignment Title</label>
-              <input value={assignTitle} onChange={(e) => setAssignTitle(e.target.value)} placeholder="e.g. Essay on Italian Renaissance" required />
-            </div>
-          </div>
+              <form onSubmit={handleCreateLesson} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="field">
+                    <label>Module Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Modulo 1: Primi Passi in Italia"
+                      value={moduleTitle}
+                      onChange={(e) => setModuleTitle(e.target.value)}
+                    />
+                  </div>
 
-          <div className="field">
-            <label>Assignment Description & Requirements</label>
-            <textarea rows={3} value={assignDesc} onChange={(e) => setAssignDesc(e.target.value)} placeholder="Provide instructions, questions, word count..." required />
-          </div>
-
-          <div className="grid-3">
-            <div className="field">
-              <label>Reference PDF / Work File (Optional)</label>
-              <input type="file" accept="application/pdf,application/zip" onChange={(e) => void handleFileUpload(e, 'ref')} />
-              {assignRefFile && <div style={{ fontSize: '0.8rem', color: 'var(--azure)' }}>✓ Reference Attached</div>}
-            </div>
-            <div className="field">
-              <label>Submission Deadline</label>
-              <input type="datetime-local" value={assignDueDate} onChange={(e) => setAssignDueDate(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Total Marks</label>
-              <input type="number" value={assignTotalMarks} onChange={(e) => setAssignTotalMarks(Number(e.target.value))} min={10} max={100} required />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button className="btn btn-primary" type="submit" disabled={submittingAssign}>
-              {submittingAssign ? 'Publishing…' : 'Publish Assignment'}
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={() => setShowAddAssignment(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* CURRICULUM CHAPTERS & LESSONS */}
-      <section className="panel" style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <div>
-            <h2 style={{ margin: 0 }}>Course Chapters & Lessons ({materials.length})</h2>
-            <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
-              Full chapter-by-chapter progression. Videos, audio guides, and notes are playable directly below.
-            </p>
-          </div>
-          <span className="badge">Fully Synced to Mobile App</span>
-        </div>
-
-        {materials.length === 0 ? (
-          <Empty label="No chapter lessons added yet. Click '+ Add Chapter Lesson' above to publish video, audio, or notes." />
-        ) : (
-          <div style={{ display: 'grid', gap: '1.5rem' }}>
-            {Object.entries(groupedMaterials).map(([chTitle, lessons]) => (
-              <div
-                key={chTitle}
-                style={{
-                  background: 'var(--panel-2, rgba(255, 255, 255, 0.03))',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    background: 'rgba(13, 92, 117, 0.15)',
-                    borderBottom: '1px solid var(--border)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <strong style={{ fontSize: '1.05rem', color: 'var(--text)' }}>📂 {chTitle}</strong>
-                  <span className="badge">{lessons.length} Lesson{lessons.length > 1 ? 's' : ''}</span>
+                  <div className="field">
+                    <label>Chapter Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Capitolo 1: I Saluti & Presentazioni"
+                      value={chapterTitle}
+                      onChange={(e) => setChapterTitle(e.target.value)}
+                    />
+                  </div>
                 </div>
 
-                <div style={{ padding: '12px', display: 'grid', gap: '1rem' }}>
-                  {lessons.map((m) => (
-                    <article
-                      key={m.id}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                  <div className="field">
+                    <label>Lesson Title *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Lezione 1: Come presentarsi in italiano"
+                      value={lessonTitle}
+                      onChange={(e) => setLessonTitle(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Content Type *</label>
+                    <select value={lessonType} onChange={(e) => setLessonType(Number(e.target.value))}>
+                      <option value={1}>🎬 Video Lesson</option>
+                      <option value={2}>🎧 Audio Pronunciation Lab</option>
+                      <option value={0}>📄 PDF Worksheet / Notes</option>
+                      <option value={3}>📝 Interactive Activity / Task</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Lesson Description / Summary</label>
+                  <input
+                    type="text"
+                    placeholder="Short summary of what students will learn in this lesson"
+                    value={lessonDesc}
+                    onChange={(e) => setLessonDesc(e.target.value)}
+                  />
+                </div>
+
+                {/* S3 Media Uploaders based on content type */}
+                {lessonType === 1 && (
+                  <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                    <S3Uploader
+                      courseId={course.id}
+                      category="videos"
+                      label="Video Lesson (MP4 / WebM Direct to AWS S3)"
+                      acceptedTypes="video/mp4,video/webm,video/quicktime"
+                      maxSizeMb={500}
+                      currentUrl={videoUrl}
+                      currentObjectKey={videoObjectKey}
+                      onUploadSuccess={(res) => {
+                        setVideoUrl(res.accessUrl);
+                        setVideoObjectKey(res.objectKey);
+                      }}
+                      onRemove={() => {
+                        setVideoUrl('');
+                        setVideoObjectKey('');
+                      }}
+                    />
+                  </div>
+                )}
+
+                {lessonType === 0 && (
+                  <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                    <S3Uploader
+                      courseId={course.id}
+                      category="documents"
+                      label="PDF Worksheet or Study Notes (Direct to AWS S3)"
+                      acceptedTypes="application/pdf"
+                      maxSizeMb={50}
+                      currentUrl={pdfUrl}
+                      currentObjectKey={pdfObjectKey}
+                      onUploadSuccess={(res) => {
+                        setPdfUrl(res.accessUrl);
+                        setPdfObjectKey(res.objectKey);
+                      }}
+                      onRemove={() => {
+                        setPdfUrl('');
+                        setPdfObjectKey('');
+                      }}
+                    />
+                  </div>
+                )}
+
+                {lessonType === 2 && (
+                  <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                    <S3Uploader
+                      courseId={course.id}
+                      category="audios"
+                      label="Native Italian Audio Recording (MP3 / WAV Direct to AWS S3)"
+                      acceptedTypes="audio/mpeg,audio/mp3,audio/wav"
+                      maxSizeMb={50}
+                      currentUrl={audioUrl}
+                      currentObjectKey={audioObjectKey}
+                      onUploadSuccess={(res) => {
+                        setAudioUrl(res.accessUrl);
+                        setAudioObjectKey(res.objectKey);
+                      }}
+                      onRemove={() => {
+                        setAudioUrl('');
+                        setAudioObjectKey('');
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="field">
+                  <label>Study Notes & Grammar Points (Markdown / Plain Text)</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Write key vocabulary, verb conjugation tables, and phrases for students..."
+                    value={contentText}
+                    onChange={(e) => setContentText(e.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Practical Exercise / Homework Task</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Record 30 seconds introducing yourself and submit in Student Portal"
+                    value={practicalTask}
+                    onChange={(e) => setPracticalTask(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      id="freePreview"
+                      checked={isFreePreview}
+                      onChange={(e) => setIsFreePreview(e.target.checked)}
+                    />
+                    <label htmlFor="freePreview" style={{ fontSize: '0.88rem', fontWeight: 600 }}>
+                      Allow Free Preview (Accessible before registration)
+                    </label>
+                  </div>
+
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setShowAddLesson(false)}
+                      disabled={savingLesson}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={savingLesson}
+                    >
+                      {savingLesson ? 'Saving…' : '✓ Add Lesson to Curriculum'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Curriculum Tree View */}
+          {materials.length === 0 ? (
+            <Empty
+              label="No lessons in this course curriculum yet."
+              action={
+                <button className="btn btn-primary" onClick={() => setShowAddLesson(true)}>
+                  ➕ Create First Lesson
+                </button>
+              }
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {Object.entries(moduleMap).map(([modName, chapObj]) => (
+                <div key={modName} className="panel" style={{ padding: '1.25rem', borderLeft: '4px solid #0D5C75' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.4rem' }}>📁</span>
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+                        {modName}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {Object.entries(chapObj).map(([chapName, items]) => (
+                    <div
+                      key={chapName}
                       style={{
-                        padding: '12px',
-                        background: 'var(--panel, rgba(255, 255, 255, 0.02))',
-                        borderRadius: '8px',
+                        background: '#f8fafc',
+                        borderRadius: '10px',
+                        padding: '1rem',
+                        marginBottom: '1rem',
                         border: '1px solid var(--border)',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                        <div>
-                          <strong style={{ fontSize: '1rem' }}>{m.title}</strong>
-                          <span style={{ marginLeft: 8, fontSize: '0.8rem', color: 'var(--muted)' }}>
-                            ⏱️ {m.durationMinutes ?? 15} mins
-                          </span>
-                        </div>
-                        <span className="badge">{getMaterialIcon(m.type)}</span>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#334155', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>📖</span>
+                        <span>{chapName}</span>
+                        <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
+                          {items.length} Activities
+                        </span>
                       </div>
 
-                      {m.description && (
-                        <p style={{ color: 'var(--muted)', margin: '0.4rem 0 0.6rem', fontSize: '0.9rem' }}>
-                          {m.description}
-                        </p>
-                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {items.map((item, idx) => {
+                          const icon = item.type === 1 ? '🎬' : item.type === 2 ? '🎧' : '📄';
+                          const typeLabel = item.type === 1 ? 'Video' : item.type === 2 ? 'Audio Lab' : 'Document';
 
-                      {/* INLINE MEDIA PREVIEW (Video / Audio / PDF) */}
-                      {m.videoUrl && (
-                        <div style={{ margin: '8px 0' }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                            🎬 Video Tutorial Stream:
-                          </span>
-                          <video
-                            controls
-                            preload="metadata"
-                            src={m.videoUrl}
-                            style={{ width: '100%', maxHeight: '320px', borderRadius: '6px', background: '#000' }}
-                          />
-                        </div>
-                      )}
+                          return (
+                            <div
+                              key={item.id}
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                padding: '10px 14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '12px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                                <span style={{ fontSize: '1.2rem' }}>{icon}</span>
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
+                                    {idx + 1}. {item.title}
+                                  </div>
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                                    {typeLabel} • {item.durationMinutes || 15} mins {item.videoUrl && '• AWS S3 Stream Ready'}
+                                  </div>
+                                </div>
+                              </div>
 
-                      {m.audioUrl && (
-                        <div style={{ margin: '8px 0' }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                            🎧 Native Audio Pronunciation:
-                          </span>
-                          <audio controls preload="metadata" src={m.audioUrl} style={{ width: '100%' }} />
-                        </div>
-                      )}
-
-                      {m.pdfUrl && (
-                        <div style={{ margin: '8px 0' }}>
-                          <a
-                            href={m.pdfUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn btn-secondary"
-                            style={{ fontSize: '0.85rem', display: 'inline-block' }}
-                          >
-                            📄 Open Lesson PDF Workbook
-                          </a>
-                        </div>
-                      )}
-
-                      {m.contentText && (
-                        <div style={{ margin: '8px 0', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '6px', fontSize: '0.88rem' }}>
-                          <strong>📖 Explanation:</strong>
-                          <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{m.contentText}</p>
-                        </div>
-                      )}
-
-                      {m.practicalTask && (
-                        <div style={{ margin: '8px 0', background: 'rgba(212, 175, 55, 0.1)', border: '1px solid rgba(212, 175, 55, 0.3)', padding: '10px', borderRadius: '6px', fontSize: '0.88rem' }}>
-                          <strong style={{ color: '#d4af37' }}>✍️ Practical Task:</strong>
-                          <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{m.practicalTask}</p>
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-                        {canManage && (
-                          <button
-                            type="button"
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#e63946',
-                              cursor: 'pointer',
-                              fontSize: '0.82rem',
-                            }}
-                            onClick={() => void handleDeleteMaterial(m.id)}
-                          >
-                            Remove Lesson
-                          </button>
-                        )}
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                {item.videoUrl && (
+                                  <a
+                                    href={item.videoUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                                  >
+                                    ▶ Preview
+                                  </a>
+                                )}
+                                {item.pdfUrl && (
+                                  <a
+                                    href={item.pdfUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                                  >
+                                    📄 PDF
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLesson(item.id)}
+                                  className="btn btn-secondary"
+                                  style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#dc2626' }}
+                                  title="Delete Lesson"
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </article>
+                    </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ASSIGNMENTS SECTION */}
-      <section className="panel" style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <div>
-            <h2 style={{ margin: 0 }}>Practical Assignments ({assignments.length})</h2>
-            <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
-              Practical tasks with submission deadlines and mentor grading.
-            </p>
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+      )}
 
-        {assignments.length === 0 ? (
-          <Empty label="No practical assignments created for this course yet." />
-        ) : (
-          <div style={{ display: 'grid', gap: '0.85rem' }}>
+      {/* TAB 2: PRACTICAL ASSIGNMENTS & GRADING */}
+      {activeTab === 'assignments' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                Practical Assignments & Homework
+              </h2>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 0' }}>
+                Review student text and audio homework submissions and assign grades and feedback.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowAddAssignment(!showAddAssignment)}
+            >
+              {showAddAssignment ? '✕ Close Form' : '➕ Create New Assignment'}
+            </button>
+          </div>
+
+          {showAddAssignment && (
+            <div className="panel" style={{ background: '#f8fafc', borderLeft: '4px solid #f59e0b' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
+                New Homework Assignment
+              </h3>
+              <form onSubmit={handleCreateAssignment} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="field">
+                  <label>Assignment Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Modulo 1: Presentazione Personale in Italiano"
+                    value={assignTitle}
+                    onChange={(e) => setAssignTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Task Instructions for Students *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="Describe what the student needs to write or record..."
+                    value={assignDesc}
+                    onChange={(e) => setAssignDesc(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="field">
+                    <label>Total Marks</label>
+                    <input
+                      type="number"
+                      value={assignTotalMarks}
+                      onChange={(e) => setAssignTotalMarks(Number(e.target.value))}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Reference Attachment (optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Optional link to reference document"
+                      value={assignRefFile}
+                      onChange={(e) => setAssignRefFile(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowAddAssignment(false)}
+                    disabled={submittingAssign}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={submittingAssign}
+                  >
+                    {submittingAssign ? 'Creating…' : 'Save Assignment'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Assignments List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {assignments.map((a) => (
               <div
                 key={a.id}
+                className="panel"
                 style={{
-                  padding: '12px',
-                  background: 'var(--panel-2, rgba(255,255,255,0.03))',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '1rem',
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <strong>{a.title}</strong>
-                    <span className="badge" style={{ fontSize: '0.75rem' }}>{a.chapterTitle}</span>
-                    <span className="badge" style={{ fontSize: '0.75rem' }}>{a.totalMarks} Marks</span>
-                  </div>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 4 }}>{a.description}</div>
-                  {a.dueDateUtc && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--azure)', marginTop: 4 }}>
-                      Due: {new Date(a.dueDateUtc).toLocaleDateString()}
-                    </div>
-                  )}
+                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)', margin: '0 0 4px' }}>
+                    {a.title}
+                  </h4>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.88rem', margin: '0 0 6px' }}>
+                    {a.description}
+                  </p>
+                  <span className="badge badge-primary">Total Marks: {a.totalMarks}</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {a.referenceFileUrl && (
-                    <a href={a.referenceFileUrl} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ fontSize: '0.8rem' }}>
-                      Ref File
-                    </a>
-                  )}
-                  {canManage && (
-                    <button
-                      className="btn btn-azure"
-                      type="button"
-                      style={{ fontSize: '0.8rem' }}
-                      onClick={() => void handleOpenSubmissions(a)}
-                    >
-                      View Submissions & Grade
-                    </button>
-                  )}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSubmissions(a)}
+                    className="btn btn-primary"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    📝 Review Student Submissions
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </section>
 
-      {/* SUBMISSIONS MODAL */}
-      {selectedAssignmentSubs && (
-        <section className="panel" style={{ marginBottom: '1.25rem', border: '1px solid var(--azure)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h2 style={{ margin: 0 }}>
-              Submissions: {selectedAssignmentSubs.assignment.title} ({selectedAssignmentSubs.submissions.length})
-            </h2>
-            <button className="btn btn-secondary" type="button" onClick={() => setSelectedAssignmentSubs(null)}>
-              Close Submissions
-            </button>
-          </div>
+          {/* Submissions Review Modal */}
+          {selectedAssignmentSubs && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: '1.5rem',
+              }}
+            >
+              <div
+                className="panel"
+                style={{
+                  width: '100%',
+                  maxWidth: '700px',
+                  maxHeight: '90vh',
+                  overflowY: 'auto',
+                  background: '#ffffff',
+                  padding: '2rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                    Submissions: {selectedAssignmentSubs.assignment.title}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAssignmentSubs(null)}
+                    style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer' }}
+                  >
+                    ✕
+                  </button>
+                </div>
 
-          {selectedAssignmentSubs.submissions.length === 0 ? (
-            <Empty label="No student submissions received for this assignment yet." />
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Submission Date</th>
-                  <th>Status</th>
-                  <th>Marks</th>
-                  <th>Feedback</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedAssignmentSubs.submissions.map((sub) => (
-                  <tr key={sub.id}>
-                    <td>
-                      <strong>{sub.studentName}</strong>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{sub.studentEmail}</div>
-                      {sub.submissionText && (
-                        <div style={{ fontSize: '0.82rem', marginTop: 4, background: 'rgba(0,0,0,0.2)', padding: 6, borderRadius: 4 }}>
-                          "{sub.submissionText}"
-                        </div>
-                      )}
-                      {sub.submissionFileUrl && (
-                        <a href={sub.submissionFileUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: 'var(--azure)', display: 'block', marginTop: 4 }}>
-                          📎 View Submitted File
-                        </a>
-                      )}
-                    </td>
-                    <td>{new Date(sub.submittedAtUtc).toLocaleDateString()}</td>
-                    <td>
-                      <span className={`badge ${sub.status === 'Graded' ? 'badge-success' : 'badge-warn'}`}>
-                        {sub.status}
-                      </span>
-                    </td>
-                    <td>
-                      {sub.marksObtained !== null && sub.marksObtained !== undefined
-                        ? `${sub.marksObtained} / ${selectedAssignmentSubs.assignment.totalMarks}`
-                        : 'Ungraded'}
-                    </td>
-                    <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-                      {sub.teacherFeedback ?? '—'}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-primary"
-                        type="button"
-                        style={{ fontSize: '0.78rem', padding: '4px 8px' }}
-                        onClick={() => {
-                          setGradingSub(sub);
-                          setGradeMarks(sub.marksObtained ?? 85);
-                          setGradeFeedback(sub.teacherFeedback ?? 'Well structured response!');
+                {selectedAssignmentSubs.submissions.length === 0 ? (
+                  <p style={{ color: 'var(--muted)', padding: '1rem 0' }}>No submissions received from students yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {selectedAssignmentSubs.submissions.map((sub) => (
+                      <div
+                        key={sub.id}
+                        style={{
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                          padding: '1rem',
                         }}
                       >
-                        Grade & Feedback
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontWeight: 700 }}>{sub.studentName} ({sub.studentEmail})</span>
+                          <span className="badge badge-success">
+                            {sub.marksObtained !== null && sub.marksObtained !== undefined
+                              ? `Score: ${sub.marksObtained}`
+                              : 'Pending Grade'}
+                          </span>
+                        </div>
+                        <p style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', fontSize: '0.88rem' }}>
+                          {sub.submissionText}
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => setGradingSub(sub)}
+                          style={{ marginTop: '8px', fontSize: '0.8rem' }}
+                        >
+                          ⭐ Grade Submission
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
-        </section>
-      )}
 
-      {/* GRADING FORM */}
-      {gradingSub && (
-        <form className="panel" onSubmit={handleGradeSubmission} style={{ marginBottom: '1.25rem', border: '1px solid #10b981' }}>
-          <h2>Grade Submission – {gradingSub.studentName}</h2>
-          <div className="grid-2">
-            <div className="field">
-              <label>Marks Awarded (out of 100)</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={gradeMarks}
-                onChange={(e) => setGradeMarks(Number(e.target.value))}
-                required
-              />
+          {/* Grade Form Modal */}
+          {gradingSub && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1100,
+                padding: '1.5rem',
+              }}
+            >
+              <div className="panel" style={{ width: '100%', maxWidth: '500px', background: '#ffffff', padding: '1.75rem' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem' }}>
+                  Grade Submission for {gradingSub.studentName}
+                </h3>
+                <form onSubmit={handleSaveGrade} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="field">
+                    <label>Marks Obtained (out of 100) *</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      required
+                      value={gradeMarks}
+                      onChange={(e) => setGradeMarks(Number(e.target.value))}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Instructor Feedback *</label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={gradeFeedback}
+                      onChange={(e) => setGradeFeedback(e.target.value)}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setGradingSub(null)}
+                      disabled={submittingGrade}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={submittingGrade}
+                    >
+                      {submittingGrade ? 'Saving…' : '✓ Send Grade & Feedback'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-            <div className="field">
-              <label>Mentor Feedback Note</label>
-              <textarea
-                rows={2}
-                value={gradeFeedback}
-                onChange={(e) => setGradeFeedback(e.target.value)}
-                placeholder="Give constructive feedback on grammar, pronunciation, vocabulary..."
-                required
-              />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-primary" type="submit" disabled={submittingGrade}>
-              {submittingGrade ? 'Submitting Grade…' : 'Submit Grade & Email Student'}
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={() => setGradingSub(null)}>
-              Cancel
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       )}
     </div>
   );
 }
+export default CourseDetailPage;

@@ -1,9 +1,16 @@
+import type { ReactNode } from 'react';
+
 export function Loading({ label = 'Loading…' }: { label?: string }) {
   return <div className="loading">{label}</div>;
 }
 
-export function Empty({ label = 'Nothing here yet.' }: { label?: string }) {
-  return <div className="empty">{label}</div>;
+export function Empty({ label = 'Nothing here yet.', action }: { label?: string; action?: ReactNode }) {
+  return (
+    <div className="empty">
+      <p>{label}</p>
+      {action && <div style={{ marginTop: '0.75rem' }}>{action}</div>}
+    </div>
+  );
 }
 
 export function ErrorBox({ message }: { message: string }) {

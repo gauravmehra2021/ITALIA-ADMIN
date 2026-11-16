@@ -10,7 +10,9 @@ import type {
   AuthResponse,
   Certificate,
   ClassSession,
+  ConfirmUploadResponse,
   Course,
+  CourseStats,
   CreateEnquiryRequest,
   DashboardStats,
   Enquiry,
@@ -20,6 +22,7 @@ import type {
   NotificationItem,
   PagedResult,
   Payment,
+  PresignedUploadResponse,
   Progress,
   StaffDashboard,
   Subscription,
@@ -73,11 +76,44 @@ export const coursesApi = {
     if (params.sortDescending !== undefined) q.set('sortDescending', String(params.sortDescending));
     return api.get<PagedResult<Course>>(`/api/courses?${q}`);
   },
+  stats: () => api.get<CourseStats>('/api/courses/stats'),
   get: (id: string) => api.get<Course>(`/api/courses/${id}`),
   enroll: (id: string) => api.post(`/api/courses/${id}/enroll`),
   create: (body: unknown) => api.post<Course>('/api/courses', body),
   update: (id: string, body: unknown) => api.put<Course>(`/api/courses/${id}`, body),
+  publish: (id: string) => api.post<Course>(`/api/courses/${id}/publish`),
+  unpublish: (id: string) => api.post<Course>(`/api/courses/${id}/unpublish`),
   delete: (id: string) => api.delete(`/api/courses/${id}`),
+};
+
+export const s3UploadApi = {
+  getPresignedUrl: (data: {
+    courseId: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    category?: string;
+    moduleId?: string;
+    chapterId?: string;
+    lessonId?: string;
+  }) => api.post<PresignedUploadResponse>('/api/uploads/s3/presigned-url', data),
+
+  confirmUpload: (data: {
+    courseId: string;
+    fileName: string;
+    originalFileName: string;
+    objectKey: string;
+    mimeType: string;
+    fileSize: number;
+    fileType: string;
+    moduleId?: string;
+    chapterId?: string;
+    lessonId?: string;
+    durationSeconds?: number;
+  }) => api.post<ConfirmUploadResponse>('/api/uploads/s3/confirm', data),
+
+  getAccessUrl: (objectKey: string) =>
+    api.get<{ objectKey: string; accessUrl: string; expiresAtUtc: string }>(`/api/uploads/s3/access-url?objectKey=${encodeURIComponent(objectKey)}`),
 };
 
 export const classesApi = {
