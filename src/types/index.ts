@@ -66,6 +66,8 @@ export interface Course {
   displayOrder?: number;
   modulesCount?: number;
   lessonsCount?: number;
+  cefrLevel?: string;
+  category?: string;
 }
 
 export interface CourseStats {
@@ -415,4 +417,165 @@ export interface UpdateEnquiryStatusRequest {
   staffNotes?: string;
   assignedStaffId?: string;
   assignedStaffName?: string;
+}
+
+// ── Curriculum (course builder) ────────────────────────────────────────────
+
+export type LessonKind = 'Vocabulary' | 'Dialogue' | 'Grammar' | 'Review' | 'Video' | 'Exam';
+export type LessonStatus = 'Draft' | 'Published';
+export type BlockType = 'Text' | 'Vocabulary' | 'Dialogue' | 'Video' | 'Audio' | 'Image' | 'Pdf' | 'Tip' | 'Table';
+export type ExerciseType = 'ListenPick' | 'PickTranslation' | 'PickWord' | 'MatchPairs' | 'FillBlank' | 'WordOrder' | 'TrueFalse';
+
+export interface VocabularyItem {
+  id?: string;
+  italian: string;
+  english: string;
+  pronunciation?: string | null;
+  imageUrl?: string | null;
+  audioUrl?: string | null;
+  example?: string | null;
+  exampleEnglish?: string | null;
+}
+
+export interface DialogueLine {
+  speaker: string;
+  italian: string;
+  english: string;
+  audioUrl?: string | null;
+}
+
+export interface LessonBlock {
+  id?: string;
+  type: BlockType;
+  title?: string | null;
+  body?: string | null;
+  mediaUrl?: string | null;
+  caption?: string | null;
+  items: VocabularyItem[];
+  lines: DialogueLine[];
+  table: string[][];
+}
+
+export interface ExerciseOption {
+  text: string;
+  imageUrl?: string | null;
+}
+
+export interface LessonExercise {
+  id?: string;
+  type: ExerciseType;
+  prompt: string;
+  italian?: string | null;
+  imageUrl?: string | null;
+  options: ExerciseOption[];
+  correctIndex: number;
+  answer?: string | null;
+  pairs: { left: string; right: string }[];
+  explanation?: string | null;
+}
+
+export interface LessonSummary {
+  id: string;
+  unitId: string;
+  order: number;
+  title: string;
+  titleIt: string;
+  kind: LessonKind;
+  summary: string;
+  estimatedMinutes: number;
+  xpReward: number;
+  status: LessonStatus;
+  isFreePreview: boolean;
+  vocabularyCount: number;
+  exerciseCount: number;
+  hasVideo: boolean;
+  hasAudio: boolean;
+  hasPdf: boolean;
+}
+
+export interface CourseUnit {
+  id: string;
+  courseId: string;
+  order: number;
+  title: string;
+  titleIt: string;
+  description: string;
+  canDo: string[];
+  imageUrl?: string | null;
+  pdfUrl?: string | null;
+  liveClassFocus?: string | null;
+  status: LessonStatus;
+  lessons: LessonSummary[];
+}
+
+export interface CourseOutline {
+  course: Course;
+  units: CourseUnit[];
+  totalLessons: number;
+}
+
+export interface LessonDetail {
+  id: string;
+  courseId: string;
+  unitId: string;
+  unitTitle: string;
+  order: number;
+  title: string;
+  titleIt: string;
+  kind: LessonKind;
+  summary: string;
+  estimatedMinutes: number;
+  xpReward: number;
+  status: LessonStatus;
+  isFreePreview: boolean;
+  blocks: LessonBlock[];
+  exercises: LessonExercise[];
+  homework?: string | null;
+  previousLessonId?: string | null;
+  nextLessonId?: string | null;
+}
+
+export interface SaveUnitRequest {
+  title: string;
+  titleIt?: string;
+  description?: string;
+  canDo?: string[];
+  imageUrl?: string | null;
+  pdfUrl?: string | null;
+  liveClassFocus?: string | null;
+  status: LessonStatus;
+}
+
+export interface SaveLessonRequest {
+  title: string;
+  titleIt?: string;
+  kind: LessonKind;
+  summary?: string;
+  estimatedMinutes: number;
+  xpReward: number;
+  status: LessonStatus;
+  isFreePreview: boolean;
+  blocks: LessonBlock[];
+  exercises: LessonExercise[];
+  homework?: string | null;
+  unitId?: string;
+}
+
+export interface StudentCourseProgress {
+  userId: string;
+  fullName: string;
+  email: string;
+  completedLessons: number;
+  totalLessons: number;
+  completionPercent: number;
+  stars: number;
+  xpEarned: number;
+  averageScorePercent: number;
+  lastActivityAtUtc?: string | null;
+  enrolledAtUtc?: string | null;
+}
+
+export interface Illustration {
+  name: string;
+  url: string;
 }

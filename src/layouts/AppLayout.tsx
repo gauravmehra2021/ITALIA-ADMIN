@@ -1,100 +1,52 @@
-import { useState, useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Icon, type IconName } from '../components/Icons';
+import { Avatar, Logo } from '../components/ui';
 import { useTheme } from '../context/ThemeContext';
-import { roleLabel } from '../types';
+import { useAuth } from '../hooks/useAuth';
+import { notificationsApi } from '../services/platformApi';
+import { roleLabel, type UserRole } from '../types';
 import './layout.css';
 
-const NavIcons = {
-  Sun: () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="5" />
-      <line x1="12" y1="1" x2="12" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="23" />
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-      <line x1="1" y1="12" x2="3" y2="12" />
-      <line x1="21" y1="12" x2="23" y2="12" />
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-    </svg>
-  ),
-  Moon: () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  ),
-  ChevronLeft: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  ),
-  ChevronRight: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  ),
-  Dashboard: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="9" rx="1.5" />
-      <rect x="14" y="3" width="7" height="5" rx="1.5" />
-      <rect x="14" y="12" width="7" height="9" rx="1.5" />
-      <rect x="3" y="16" width="7" height="5" rx="1.5" />
-    </svg>
-  ),
-  Admissions: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <polyline points="16 11 18 13 22 9" />
-    </svg>
-  ),
-  Courses: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-      <path d="M6 12v5c0 3 6 3 6 3s6 0 6-3v-5" />
-    </svg>
-  ),
-  LiveClasses: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="23 7 16 12 23 17 23 7" />
-      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    </svg>
-  ),
-  Notifications: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  ),
-  Users: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-  Audit: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  ),
-  Logout: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  ),
-};
+type NavItem = { to: string; label: string; icon: IconName; roles: UserRole[]; end?: boolean };
+type NavGroup = { title: string; items: NavItem[] };
+
+const ALL: UserRole[] = ['SuperAdmin', 'Admin', 'Staff', 'Mentor'];
+const TEACHING: UserRole[] = ['SuperAdmin', 'Admin', 'Mentor'];
+
+const NAV: NavGroup[] = [
+  { title: 'Overview', items: [{ to: '/app', label: 'Dashboard', icon: 'Grid', roles: ALL, end: true }] },
+  { title: 'Admissions', items: [{ to: '/app/enquiries', label: 'Admissions & Leads', icon: 'Inbox', roles: ['SuperAdmin', 'Admin', 'Staff'] }] },
+  {
+    title: 'Teaching',
+    items: [
+      { to: '/app/courses', label: 'Courses & Content', icon: 'Book', roles: TEACHING },
+      { to: '/app/classes', label: 'Live Classes', icon: 'Video', roles: TEACHING },
+    ],
+  },
+  { title: 'Communication', items: [{ to: '/app/notifications', label: 'Notifications', icon: 'Bell', roles: TEACHING }] },
+  {
+    title: 'Administration',
+    items: [
+      { to: '/app/users', label: 'Users & Roles', icon: 'Users', roles: ['SuperAdmin'] },
+      { to: '/app/audit', label: 'Audit Log', icon: 'ShieldCheck', roles: ['SuperAdmin'] },
+    ],
+  },
+];
+
+/** Title shown in the top bar for the current address. */
+function pageTitle(path: string): { title: string; parent?: { to: string; label: string } } {
+  if (/^\/app\/courses\/[^/]+\/lessons\//.test(path)) return { title: 'Lesson editor', parent: { to: '/app/courses', label: 'Courses' } };
+  if (/^\/app\/courses\/[^/]+/.test(path)) return { title: 'Course builder', parent: { to: '/app/courses', label: 'Courses' } };
+  for (const g of NAV) for (const i of g.items) if (i.end ? path === i.to : path.startsWith(i.to)) return { title: i.label };
+  return { title: 'Dashboard' };
+}
 
 export function AppLayout() {
   const { user, logout, isDemo, hasRole } = useAuth();
-  const { theme, isDark, toggleTheme, setTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -103,269 +55,200 @@ export function AppLayout() {
       return false;
     }
   });
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const toggleSidebar = () => {
+  const canSeeNotifications = hasRole(...TEACHING);
+
+  const toggleSidebar = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
       try {
         localStorage.setItem('sseuropa_admin_sidebar_collapsed', String(next));
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       return next;
     });
-  };
+  }, []);
 
-  // Keyboard shortcuts: Ctrl+B (Sidebar toggle) & Ctrl+Shift+D (Theme toggle)
+  // Close menus when the page changes; refresh the unread count.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    setMobileOpen(false);
+    setMenuOpen(false);
+    if (!canSeeNotifications) return;
+    notificationsApi
+      .list()
+      .then((list) => setUnread(list.filter((n) => !n.isRead).length))
+      .catch(() => setUnread(0));
+  }, [location.pathname, canSeeNotifications]);
+
+  // Ctrl+B collapses the sidebar.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         toggleSidebar();
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        toggleTheme();
+      if (e.key === 'Escape') {
+        setMenuOpen(false);
+        setMobileOpen(false);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleTheme]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleSidebar]);
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'AD';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  };
+  // Click outside closes the account menu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpen]);
+
+  async function onLogout() {
+    await logout();
+    navigate('/login');
+  }
+
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => hasRole(...i.roles)) })).filter((g) => g.items.length > 0);
+  const { title, parent } = pageTitle(location.pathname);
+  // The lesson editor needs every pixel of width.
+  const wide = /\/lessons\//.test(location.pathname);
 
   return (
-    <div className={`shell ${collapsed ? 'is-collapsed' : ''}`}>
-      {/* ── Admin Left Sidebar ── */}
-      <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
-        {/* Brand Header */}
-        <div className={`sidebar-brand ${collapsed ? 'is-collapsed' : ''}`}>
-          {!collapsed ? (
-            <>
-              <div className="brand-header-left">
-                <span
-                  className="brand-mark"
-                  onClick={toggleSidebar}
-                  title="Click to collapse sidebar (Ctrl+B)"
-                  aria-hidden
-                />
-                <div>
-                  <div className="brand-name">SS Europa</div>
-                  <div className="brand-subtitle">
-                    <span>Management Console</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="sidebar-toggle-btn"
-                onClick={toggleSidebar}
-                title="Collapse sidebar (Ctrl+B)"
-                aria-label="Collapse sidebar"
-              >
-                <NavIcons.ChevronLeft />
-              </button>
-            </>
-          ) : (
-            <>
-              <span
-                className="brand-mark"
-                onClick={toggleSidebar}
-                title="SS Europa Management Console (Click to expand sidebar)"
-                aria-hidden
-              />
-              <button
-                type="button"
-                className="sidebar-toggle-btn"
-                onClick={toggleSidebar}
-                title="Expand sidebar (Ctrl+B)"
-                aria-label="Expand sidebar"
-              >
-                <NavIcons.ChevronRight />
-              </button>
-            </>
-          )}
+    <div className={`shell ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
+      <aside className="sidebar" aria-label="Main navigation">
+        <div className="sidebar-brand">
+          <Link to="/app" className="sidebar-logo" title="SS Europa">
+            <Logo size={40} withText={!collapsed} />
+          </Link>
+          <button type="button" className="icon-btn ghost sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+            <Icon.X size={18} />
+          </button>
         </div>
 
-        {/* Navigation Menu */}
-        <nav className="side-nav">
-          <NavLink
-            to="/app"
-            end
-            className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-            data-tooltip="Dashboard"
-            title={collapsed ? "Dashboard" : undefined}
-          >
-            <span className="nav-icon"><NavIcons.Dashboard /></span>
-            <span>Dashboard</span>
-          </NavLink>
-
-          {/* Admissions CRM: Staff and Administrators */}
-          {(hasRole('Staff') || hasRole('Admin') || hasRole('SuperAdmin')) && (
-            <NavLink
-              to="/app/enquiries"
-              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-              data-tooltip="Admissions & Leads"
-              title={collapsed ? "Admissions & Leads" : undefined}
-            >
-              <span className="nav-icon"><NavIcons.Admissions /></span>
-              <span>Admissions & Leads</span>
-            </NavLink>
-          )}
-
-          {/* Academic Modules: Teachers and Administrators */}
-          {(hasRole('Mentor') || hasRole('Admin') || hasRole('SuperAdmin')) && (
-            <>
-              <NavLink
-                to="/app/courses"
-                className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-                data-tooltip="Courses & Content"
-                title={collapsed ? "Courses & Content" : undefined}
-              >
-                <span className="nav-icon"><NavIcons.Courses /></span>
-                <span>Courses & Content</span>
-              </NavLink>
-              <NavLink
-                to="/app/classes"
-                className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-                data-tooltip="Live Classes"
-                title={collapsed ? "Live Classes" : undefined}
-              >
-                <span className="nav-icon"><NavIcons.LiveClasses /></span>
-                <span>Live Classes</span>
-              </NavLink>
-            </>
-          )}
-
-          {/* Platform Communication: Teachers and Administrators */}
-          {(hasRole('Mentor') || hasRole('Admin') || hasRole('SuperAdmin')) && (
-            <NavLink
-              to="/app/notifications"
-              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-              data-tooltip="Notifications"
-              title={collapsed ? "Notifications" : undefined}
-            >
-              <span className="nav-icon"><NavIcons.Notifications /></span>
-              <span>Notifications</span>
-            </NavLink>
-          )}
-
-          {/* Team Management: Super Admin only (creates Admin, Staff and Teacher accounts) */}
-          {hasRole('SuperAdmin') && (
-            <NavLink
-              to="/app/users"
-              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-              data-tooltip="Users & Roles"
-              title={collapsed ? "Users & Roles" : undefined}
-            >
-              <span className="nav-icon"><NavIcons.Users /></span>
-              <span>Users & Roles</span>
-            </NavLink>
-          )}
-
-          {/* Governance & Audit: Super Admin Only */}
-          {hasRole('SuperAdmin') && (
-            <NavLink
-              to="/app/audit"
-              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-              data-tooltip="Audit Log"
-              title={collapsed ? "Audit Log" : undefined}
-            >
-              <span className="nav-icon"><NavIcons.Audit /></span>
-              <span>Audit Log</span>
-            </NavLink>
-          )}
+        <nav className="sidebar-nav">
+          {groups.map((g) => (
+            <div className="nav-group" key={g.title}>
+              <div className="nav-group-title">{g.title}</div>
+              {g.items.map((i) => {
+                const I = Icon[i.icon];
+                return (
+                  <NavLink
+                    key={i.to}
+                    to={i.to}
+                    end={i.end}
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                    title={collapsed ? i.label : undefined}
+                  >
+                    <I size={19} />
+                    <span className="nav-label">{i.label}</span>
+                    {i.to === '/app/notifications' && unread > 0 && <span className="nav-count">{unread}</span>}
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        {/* Sidebar Footer with Theme Switcher & User Avatar Chip */}
         <div className="sidebar-foot">
-          {/* Theme Switcher */}
-          {!collapsed ? (
-            <div className="theme-toggle-container">
-              <button
-                type="button"
-                className={`theme-toggle-pill ${theme === 'light' ? 'active' : ''}`}
-                onClick={() => setTheme('light')}
-                title="Light Mode"
-              >
-                <NavIcons.Sun />
-                <span>Light</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-toggle-pill ${theme === 'dark' ? 'active' : ''}`}
-                onClick={() => setTheme('dark')}
-                title="Dark Mode"
-              >
-                <NavIcons.Moon />
-                <span>Dark</span>
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="theme-toggle-btn-collapsed"
-              onClick={toggleTheme}
-              title={isDark ? "Switch to Light Mode (Ctrl+Shift+D)" : "Switch to Dark Mode (Ctrl+Shift+D)"}
-              data-tooltip={isDark ? "Light Mode" : "Dark Mode"}
-              aria-label="Toggle light and dark mode"
-            >
-              {isDark ? <NavIcons.Sun /> : <NavIcons.Moon />}
-            </button>
-          )}
-
-          {/* Demo Sandbox Tag */}
           {isDemo && (
-            !collapsed ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '6px', fontSize: '0.72rem', color: '#FBBF24', fontWeight: 700 }}>
-                <span>⚡</span>
-                <span>Demo Sandbox Mode</span>
-              </div>
-            ) : (
-              <div className="demo-badge-collapsed" data-tooltip="Demo Sandbox Mode" title="Demo Sandbox Mode">
-                <span>⚡</span>
-              </div>
-            )
-          )}
-
-          {/* User Profile Card */}
-          <div
-            className={`user-profile-card ${collapsed ? 'is-collapsed' : ''}`}
-            data-tooltip={`${user?.fullName || 'SS Europa'} (${roleLabel(user?.role)})`}
-            title={collapsed ? `${user?.fullName || 'SS Europa'} (${roleLabel(user?.role)})` : undefined}
-          >
-            <div className="user-avatar-circle">
-              {getInitials(user?.fullName)}
+            <div className="sidebar-demo" title="Local demonstration data">
+              <Icon.Sparkles size={16} />
+              <span className="nav-label">Demo data</span>
             </div>
-            {!collapsed && (
-              <div className="user-meta">
-                <strong className="user-name">{user?.fullName || 'SS Europa Admin'}</strong>
-                <span className="user-role-badge">{roleLabel(user?.role)}</span>
-              </div>
-            )}
+          )}
+          <div className="sidebar-role">
+            <span className="sidebar-flag" aria-hidden><span /><span /><span /></span>
+            <span className="nav-label">
+              Signed in as <strong>{roleLabel(user?.role)}</strong>
+            </span>
           </div>
-
-          {/* Sign Out Button */}
-          <button
-            className={`sidebar-logout-btn ${collapsed ? 'is-collapsed' : ''}`}
-            type="button"
-            onClick={() => void logout()}
-            title="Sign out from management console"
-            data-tooltip="Sign Out"
-          >
-            <NavIcons.Logout />
-            {!collapsed && <span>Sign Out</span>}
+          <button type="button" className="nav-item collapse-btn" onClick={toggleSidebar} title={collapsed ? 'Expand menu (Ctrl+B)' : 'Collapse menu (Ctrl+B)'}>
+            {collapsed ? <Icon.ChevronRight size={19} /> : <Icon.ChevronLeft size={19} />}
+            <span className="nav-label">Collapse menu</span>
           </button>
         </div>
       </aside>
 
-      {/* ── Main Application Workspace ── */}
-      <main className="main">
-        <Outlet />
-      </main>
+      <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-hidden />
+
+      <div className="main">
+        <header className="topbar">
+          <button type="button" className="icon-btn ghost topbar-menu" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+            <Icon.Menu size={20} />
+          </button>
+
+          <div className="topbar-title">
+            {parent && (
+              <>
+                <Link to={parent.to}>{parent.label}</Link>
+                <Icon.ChevronRight size={14} />
+              </>
+            )}
+            <span>{title}</span>
+          </div>
+
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="icon-btn ghost"
+              onClick={toggleTheme}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark ? <Icon.Sun size={19} /> : <Icon.Moon size={19} />}
+            </button>
+
+            {canSeeNotifications && (
+              <Link to="/app/notifications" className="icon-btn ghost" title="Notifications" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
+                <Icon.Bell size={19} />
+                {unread > 0 && <span className="dot-count">{unread > 9 ? '9+' : unread}</span>}
+              </Link>
+            )}
+
+            <div className="account" ref={menuRef}>
+              <button type="button" className="account-btn" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen} aria-haspopup="menu">
+                <Avatar name={user?.fullName} />
+                <span className="account-meta">
+                  <strong>{user?.fullName || 'Team member'}</strong>
+                  <span>{roleLabel(user?.role)}</span>
+                </span>
+                <Icon.ChevronDown size={16} />
+              </button>
+              {menuOpen && (
+                <div className="account-menu" role="menu">
+                  <div className="account-menu-head">
+                    <Avatar name={user?.fullName} size="lg" />
+                    <div>
+                      <strong>{user?.fullName}</strong>
+                      <span>{user?.email}</span>
+                      <span className="badge badge-blue" style={{ marginTop: 6, alignSelf: 'flex-start' }}>{roleLabel(user?.role)}</span>
+                    </div>
+                  </div>
+                  <button type="button" className="account-item" role="menuitem" onClick={toggleTheme}>
+                    {isDark ? <Icon.Sun size={18} /> : <Icon.Moon size={18} />}
+                    {isDark ? 'Light mode' : 'Dark mode'}
+                  </button>
+                  <button type="button" className="account-item danger" role="menuitem" onClick={() => void onLogout()}>
+                    <Icon.Logout size={18} /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className={`content ${wide ? 'is-wide' : ''}`}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

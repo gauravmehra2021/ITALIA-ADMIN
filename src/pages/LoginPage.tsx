@@ -1,92 +1,85 @@
-import type { FormEvent } from 'react';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ErrorBox, SuccessBox } from '../components/StateBlock';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Icon } from '../components/Icons';
+import { Alert, Logo } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
+import { SESSION_EXPIRED_FLAG } from '../services/api';
 import { authApi } from '../services/platformApi';
+import { PANEL_ROLES } from '../types';
 import './login.css';
 
 // Seeded demo accounts that exist only in the local in-memory database.
+// The buttons are stripped from production builds (import.meta.env.DEV).
 const DEV_DEMO_PASSWORD = 'Demo@12345';
 const DEV_DEMO_ACCOUNTS = [
-  { label: '👑 Super Admin', email: 'superadmin@sseuropa.demo' },
-  { label: '🛡️ Admin', email: 'admin@sseuropa.demo' },
-  { label: '🗂️ Staff', email: 'staff@sseuropa.demo' },
-  { label: '👩‍🏫 Teacher', email: 'mentor@sseuropa.demo' },
+  { label: 'Super Admin', email: 'superadmin@sseuropa.demo' },
+  { label: 'Admin', email: 'admin@sseuropa.demo' },
+  { label: 'Staff', email: 'staff@sseuropa.demo' },
+  { label: 'Teacher', email: 'mentor@sseuropa.demo' },
+];
+
+type Mode = 'login' | 'otp' | 'forgot' | 'reset';
+
+const FEATURES = [
+  { icon: Icon.Inbox, text: 'Follow up every website enquiry' },
+  { icon: Icon.Book, text: 'Build lessons with words, audio and exercises' },
+  { icon: Icon.Video, text: 'Schedule live classes and notify students' },
 ];
 
 export function LoginPage() {
-  const { loginWithPassword, verifyOtp, loading } = useAuth();
+  const { token, user, loginWithPassword, verifyOtp, loading } = useAuth();
   const navigate = useNavigate();
+
+  const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState('');
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [otpHint, setOtpHint] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const [isForgot, setIsForgot] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
   const [resetChallengeId, setResetChallengeId] = useState<string | null>(null);
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
 
-  async function onSendResetCode(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setInfo(null);
-    setResetSubmitting(true);
+  // Shown once after the server rejected a saved login.
+  useEffect(() => {
     try {
-      const res = await authApi.forgotPassword(forgotEmail);
-      setResetChallengeId(res.challengeId);
-      setInfo('Verification code sent. For demonstration, use code: 123456');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not request reset code.');
-    } finally {
-      setResetSubmitting(false);
+      if (sessionStorage.getItem(SESSION_EXPIRED_FLAG)) {
+        sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+        setExpired(true);
+      }
+    } catch {
+      /* ignore */
     }
-  }
+  }, []);
 
-  async function onCompleteReset(e: FormEvent) {
-    e.preventDefault();
-    if (!resetChallengeId) return;
+  if (token && user && PANEL_ROLES.includes(user.role)) return <Navigate to="/app" replace />;
+
+  const go = (m: Mode) => {
+    setMode(m);
     setError(null);
     setInfo(null);
-    setResetSubmitting(true);
-    try {
-      await authApi.resetPassword({
-        challengeId: resetChallengeId,
-        code: resetCode,
-        newPassword,
-      });
-      setInfo('Password reset successfully. You can now sign in with your new password.');
-      setIsForgot(false);
-      setResetChallengeId(null);
-      setPassword(newPassword);
-      setEmail(forgotEmail);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Password reset failed.');
-    } finally {
-      setResetSubmitting(false);
-    }
-  }
+  };
 
-  async function onPasswordLogin(e: FormEvent) {
-    e.preventDefault();
+  async function signIn(mail: string, pass: string) {
     setError(null);
     setInfo(null);
+    setExpired(false);
     try {
-      const result = await loginWithPassword(email, password);
+      const result = await loginWithPassword(mail.trim(), pass);
       if (result.requiresOtp && result.pendingUserId) {
         setPendingUserId(result.pendingUserId);
         setOtpHint(result.demoOtpHint ?? null);
-        setInfo('OTP required. Please enter the verification code.');
+        go('otp');
         return;
       }
       navigate('/app');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+      setError(err instanceof Error ? err.message : 'Sign-in failed. Please check your email and password.');
     }
   }
 
@@ -95,54 +88,185 @@ export function LoginPage() {
     if (!pendingUserId) return;
     setError(null);
     try {
-      await verifyOtp(pendingUserId, otp);
+      await verifyOtp(pendingUserId, otp.trim());
       navigate('/app');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OTP verification failed');
+      setError(err instanceof Error ? err.message : 'That code did not work. Please try again.');
     }
   }
 
+  async function onSendResetCode(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await authApi.forgotPassword(email.trim());
+      setResetChallengeId(res.challengeId);
+      go('reset');
+      setInfo(import.meta.env.DEV ? 'Code sent. Local demo code: 123456' : `We sent a 6-digit code to ${email.trim()}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send a reset code.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onCompleteReset(e: FormEvent) {
+    e.preventDefault();
+    if (!resetChallengeId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await authApi.resetPassword({ challengeId: resetChallengeId, code: resetCode.trim(), newPassword });
+      setPassword(newPassword);
+      setResetCode('');
+      setNewPassword('');
+      go('login');
+      setInfo('Password changed. You can sign in now.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Password reset failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const heading = {
+    login: { title: 'Welcome back', sub: 'Sign in to the SS Europa team console.' },
+    otp: { title: 'Check your email', sub: 'Enter the 6-digit code we sent to confirm it’s you.' },
+    forgot: { title: 'Reset your password', sub: 'Enter your work email and we’ll send you a code.' },
+    reset: { title: 'Choose a new password', sub: `Enter the code sent to ${email} and a new password.` },
+  }[mode];
+
   return (
-    <div className="login-page">
-      <div className="login-stage" aria-hidden>
-        <div className="login-photo" />
-        <div className="login-veil" />
-      </div>
+    <div className="auth">
+      <aside className="auth-hero" aria-hidden>
+        <div className="auth-hero-inner">
+          <Logo size={52} light subtitle="Management Console" />
+          <div className="auth-hero-copy">
+            <span className="auth-eyebrow">For the SS Europa team</span>
+            <h2>Everything you need to help students reach Italy.</h2>
+            <p>Admissions, courses, live classes and announcements — in one place.</p>
+          </div>
+          <ul className="auth-features">
+            {FEATURES.map(({ icon: I, text }) => (
+              <li key={text}>
+                <span><I size={18} /></span>
+                {text}
+              </li>
+            ))}
+          </ul>
+          <div className="auth-flag"><span /><span /><span /></div>
+        </div>
+      </aside>
 
-      <div className="login-shell animate-rise">
-        <Link to="/" className="brand login-brand">SS Europa</Link>
-        <p className="login-subtitle">Secure learning workspace</p>
+      <main className="auth-panel">
+        <div className="auth-card">
+          <div className="auth-mobile-logo">
+            <Logo size={44} />
+          </div>
 
-        <div className="login-panel">
-          <h1>Sign in</h1>
-          <p className="login-note">
-            Teacher, Staff & Administrator Management Portal
-          </p>
+          <div className="auth-head">
+            <h1>{heading.title}</h1>
+            <p>{heading.sub}</p>
+          </div>
 
-          {/* Local development only: one-click sign-in as each seeded demo role.
-              Stripped from production builds, so no credentials ship to the live site. */}
-          {import.meta.env.DEV && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '6px' }}>
-                Local dev: sign in as a demo role
+          <div className="auth-alerts">
+            {expired && <Alert tone="warn">Your session has ended. Please sign in again.</Alert>}
+            {error && <Alert tone="error">{error}</Alert>}
+            {info && <Alert tone="success">{info}</Alert>}
+          </div>
+
+          {mode === 'login' && (
+            <form onSubmit={(e) => { e.preventDefault(); void signIn(email, password); }}>
+              <div className="field">
+                <label htmlFor="email">Work email</label>
+                <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@sseuropa.com" required />
               </div>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div className="field">
+                <div className="auth-label-row">
+                  <label htmlFor="password">Password</label>
+                  <button type="button" className="auth-link" onClick={() => go('forgot')}>Forgot password?</button>
+                </div>
+                <div className="auth-password">
+                  <input
+                    id="password"
+                    className="input"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Your password"
+                    required
+                  />
+                  <button type="button" className="auth-eye" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <Icon.EyeOff size={18} /> : <Icon.Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+              <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+          )}
+
+          {mode === 'otp' && (
+            <form onSubmit={onVerify}>
+              {otpHint && <Alert tone="info">Local demo code: <strong>{otpHint}</strong></Alert>}
+              <div className="field" style={{ marginTop: otpHint ? 14 : 0 }}>
+                <label htmlFor="otp">Verification code</label>
+                <input id="otp" className="input auth-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="••••••" required />
+              </div>
+              <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={loading}>Verify and continue</button>
+              <button className="btn btn-ghost btn-block" type="button" style={{ marginTop: 8 }} onClick={() => go('login')}>
+                <Icon.ArrowLeft size={16} /> Back to sign in
+              </button>
+            </form>
+          )}
+
+          {mode === 'forgot' && (
+            <form onSubmit={onSendResetCode}>
+              <div className="field">
+                <label htmlFor="forgot-email">Work email</label>
+                <input id="forgot-email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@sseuropa.com" required />
+              </div>
+              <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send reset code'}</button>
+              <button className="btn btn-ghost btn-block" type="button" style={{ marginTop: 8 }} onClick={() => go('login')}>
+                <Icon.ArrowLeft size={16} /> Back to sign in
+              </button>
+            </form>
+          )}
+
+          {mode === 'reset' && (
+            <form onSubmit={onCompleteReset}>
+              <div className="field">
+                <label htmlFor="reset-code">6-digit code</label>
+                <input id="reset-code" className="input auth-code" inputMode="numeric" maxLength={6} value={resetCode} onChange={(e) => setResetCode(e.target.value)} placeholder="••••••" required />
+              </div>
+              <div className="field">
+                <label htmlFor="new-pass">New password</label>
+                <input id="new-pass" className="input" type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" required />
+              </div>
+              <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save new password'}</button>
+              <button className="btn btn-ghost btn-block" type="button" style={{ marginTop: 8 }} onClick={() => go('forgot')}>
+                Use a different email
+              </button>
+            </form>
+          )}
+
+          {import.meta.env.DEV && mode === 'login' && (
+            <div className="auth-demo">
+              <div className="auth-demo-title"><Icon.Sparkles size={14} /> Local development — sign in as</div>
+              <div className="auth-demo-grid">
                 {DEV_DEMO_ACCOUNTS.map((d) => (
                   <button
                     key={d.email}
                     type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-                    onClick={async () => {
+                    className="btn btn-secondary btn-sm"
+                    disabled={loading}
+                    onClick={() => {
                       setEmail(d.email);
                       setPassword(DEV_DEMO_PASSWORD);
-                      setError(null);
-                      try {
-                        const res = await loginWithPassword(d.email, DEV_DEMO_PASSWORD);
-                        if (!res.requiresOtp) navigate('/app');
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : 'Demo sign-in failed.');
-                      }
+                      void signIn(d.email, DEV_DEMO_PASSWORD);
                     }}
                   >
                     {d.label}
@@ -152,117 +276,11 @@ export function LoginPage() {
             </div>
           )}
 
-          {error && <ErrorBox message={error} />}
-          {info && <SuccessBox message={info} />}
-
-
-
-          {isForgot ? (
-            !resetChallengeId ? (
-              <form onSubmit={onSendResetCode}>
-                <div style={{ marginBottom: '12px', fontSize: '0.9rem', color: 'var(--muted)' }}>
-                  Enter your registered email address and we'll send a 6-digit verification code to reset your password.
-                </div>
-                <div className="field">
-                  <label htmlFor="forgot-email">Account Email</label>
-                  <input
-                    id="forgot-email"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    required
-                    type="email"
-                    placeholder="you@sseuropa.com"
-                  />
-                </div>
-                <button className="btn btn-primary" type="submit" disabled={resetSubmitting} style={{ width: '100%', marginBottom: '8px' }}>
-                  {resetSubmitting ? 'Sending code…' : 'Send reset code'}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  style={{ width: '100%' }}
-                  onClick={() => { setIsForgot(false); setError(null); setInfo(null); }}
-                >
-                  Back to login
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={onCompleteReset}>
-                <div style={{ marginBottom: '12px', fontSize: '0.9rem', color: 'var(--muted)' }}>
-                  Enter the 6-digit code sent to {forgotEmail} and choose your new password.
-                </div>
-                <div className="field">
-                  <label htmlFor="reset-code">6-Digit Code</label>
-                  <input
-                    id="reset-code"
-                    value={resetCode}
-                    onChange={(e) => setResetCode(e.target.value)}
-                    required
-                    placeholder="123456"
-                    maxLength={6}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="new-pass">New Password</label>
-                  <input
-                    id="new-pass"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    type="password"
-                    placeholder="Enter new strong password"
-                  />
-                </div>
-                <button className="btn btn-primary" type="submit" disabled={resetSubmitting} style={{ width: '100%', marginBottom: '8px' }}>
-                  {resetSubmitting ? 'Resetting password…' : 'Save new password'}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  style={{ width: '100%' }}
-                  onClick={() => { setResetChallengeId(null); setError(null); }}
-                >
-                  Change email
-                </button>
-              </form>
-            )
-          ) : !pendingUserId ? (
-            <form onSubmit={onPasswordLogin}>
-              <div className="field">
-                <label htmlFor="email">Email</label>
-                <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} required type="email" />
-              </div>
-              <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label htmlFor="password">Password</label>
-                  <button
-                    type="button"
-                    style={{ background: 'none', border: 'none', color: 'var(--azure, #0077b6)', cursor: 'pointer', fontSize: '0.8rem', padding: 0 }}
-                    onClick={() => { setIsForgot(true); setForgotEmail(email); setError(null); setInfo(null); }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-                <input id="password" value={password} onChange={(e) => setPassword(e.target.value)} required type="password" />
-              </div>
-              <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
-                Continue with OTP
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={onVerify}>
-              {otpHint && <SuccessBox message={`Demonstration OTP: ${otpHint}`} />}
-              <div className="field">
-                <label htmlFor="otp">OTP code</label>
-                <input id="otp" value={otp} onChange={(e) => setOtp(e.target.value)} required />
-              </div>
-              <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
-                Verify OTP
-              </button>
-            </form>
-          )}
+          <p className="auth-foot">
+            <Icon.Lock size={14} /> Team accounts are created by the Super Admin. Students sign in on the student portal.
+          </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

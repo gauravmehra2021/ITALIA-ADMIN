@@ -1,426 +1,201 @@
-import { useEffect, useState, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { Empty, ErrorBox, Loading, SuccessBox } from '../components/StateBlock';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Icon } from '../components/Icons';
+import { Alert, EmptyState, Modal, PageHeader, Person, Spinner, StatCard, formatDate, timeAgo } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
+import { ENQUIRY_META, ENQUIRY_STAGES, enquiryStatus } from '../lib/status';
 import { enquiriesApi } from '../services/platformApi';
 import type { Enquiry, EnquiryStatus } from '../types';
+import './pages.css';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  New: { label: 'New Lead', color: '#0369a1', bg: 'rgba(2, 132, 199, 0.12)', border: 'rgba(2, 132, 199, 0.3)' },
-  Contacted: { label: 'Contacted', color: '#b45309', bg: 'rgba(217, 119, 6, 0.12)', border: 'rgba(217, 119, 6, 0.3)' },
-  Qualified: { label: 'Qualified', color: '#7e22ce', bg: 'rgba(147, 51, 234, 0.12)', border: 'rgba(147, 51, 234, 0.3)' },
-  Enrolled: { label: 'Enrolled', color: '#15803d', bg: 'rgba(22, 163, 74, 0.12)', border: 'rgba(22, 163, 74, 0.3)' },
-  Closed: { label: 'Closed', color: '#475569', bg: 'rgba(100, 116, 139, 0.12)', border: 'rgba(100, 116, 139, 0.3)' },
-};
+type Filter = 'All' | EnquiryStatus;
 
-function getStatusKey(status: EnquiryStatus | number): string {
-  if (typeof status === 'string') return status;
-  const map: Record<number, string> = { 0: 'New', 1: 'Contacted', 2: 'Qualified', 3: 'Enrolled', 4: 'Closed' };
-  return map[status] ?? 'New';
-}
+const digits = (phone: string) => phone.replace(/[^\d]/g, '');
 
 export function EnquiriesPage() {
   const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  // Filtering
-  const [statusFilter, setStatusFilter] = useState<'All' | EnquiryStatus>('All');
+  const initialFilter = params.get('status') as Filter | null;
+  const [filter, setFilter] = useState<Filter>(initialFilter && (ENQUIRY_STAGES as string[]).includes(initialFilter) ? initialFilter : 'All');
   const [search, setSearch] = useState('');
 
-  // Selected lead for detail/modal
-  const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
-  const [newStatus, setNewStatus] = useState<EnquiryStatus>('New');
-  const [staffNotes, setStaffNotes] = useState('');
-  const [savingStatus, setSavingStatus] = useState(false);
+  const [selected, setSelected] = useState<Enquiry | null>(null);
+  const [stage, setStage] = useState<EnquiryStatus>('New');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const loadEnquiries = async () => {
+  async function load() {
     setLoading(true);
     setError(null);
     try {
-      const res = await enquiriesApi.list();
-      setEnquiries(res);
+      const list = await enquiriesApi.list();
+      list.sort((a, b) => +new Date(b.createdAtUtc) - +new Date(a.createdAtUtc));
+      setEnquiries(list);
+      return list;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load enquiries');
+      setError(err instanceof Error ? err.message : 'Could not load enquiries.');
+      return [];
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    void loadEnquiries();
+    void load().then((list) => {
+      // Opened from the dashboard: /app/enquiries?open=<id>
+      const id = params.get('open');
+      const hit = id && list.find((e) => e.id === id);
+      if (hit) openLead(hit);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Lock body scroll and handle Escape key when modal is open
-  useEffect(() => {
-    if (!selectedEnquiry) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+  function openLead(e: Enquiry) {
+    setSelected(e);
+    setStage(enquiryStatus(e.status));
+    setNotes(e.staffNotes || '');
+    setSaveError(null);
+  }
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedEnquiry(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedEnquiry]);
-
-  const openManageModal = (item: Enquiry) => {
-    setSelectedEnquiry(item);
-    setNewStatus(getStatusKey(item.status) as EnquiryStatus);
-    setStaffNotes(item.staffNotes || '');
-    setFeedback(null);
-  };
-
-  const closeManageModal = () => {
-    setSelectedEnquiry(null);
-  };
-
-  const handleUpdateStatus = async (statusOverride?: EnquiryStatus) => {
-    if (!selectedEnquiry) return;
-    const targetStatus = statusOverride ?? newStatus;
-    setSavingStatus(true);
-    setError(null);
-    try {
-      const updated = await enquiriesApi.updateStatus(selectedEnquiry.id, {
-        status: targetStatus,
-        staffNotes,
-      });
-      // Update local state
-      setEnquiries((prev) =>
-        prev.map((e) => (e.id === selectedEnquiry.id ? { ...e, ...updated } : e))
-      );
-      setSelectedEnquiry(updated);
-      setNewStatus(getStatusKey(updated.status) as EnquiryStatus);
-      setFeedback(`Status updated to "${targetStatus}" with staff notes saved.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update enquiry status');
-    } finally {
-      setSavingStatus(false);
+  function closeLead() {
+    setSelected(null);
+    if (params.has('open')) {
+      params.delete('open');
+      setParams(params, { replace: true });
     }
-  };
+  }
 
-  // Metrics
-  const metrics = useMemo(() => {
-    const total = enquiries.length;
-    const newCount = enquiries.filter((e) => getStatusKey(e.status) === 'New').length;
-    const contacted = enquiries.filter((e) => getStatusKey(e.status) === 'Contacted').length;
-    const qualified = enquiries.filter((e) => getStatusKey(e.status) === 'Qualified').length;
-    const enrolled = enquiries.filter((e) => getStatusKey(e.status) === 'Enrolled').length;
-    const closed = enquiries.filter((e) => getStatusKey(e.status) === 'Closed').length;
-    const conversionRate = total > 0 ? Math.round((enrolled / total) * 100) : 0;
-    return { total, newCount, contacted, qualified, enrolled, closed, conversionRate };
+  async function save(next: EnquiryStatus = stage) {
+    if (!selected) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      // The server makes the current team member the owner of an unassigned lead.
+      const updated = await enquiriesApi.updateStatus(selected.id, { status: next, staffNotes: notes });
+      setEnquiries((list) => list.map((e) => (e.id === selected.id ? { ...e, ...updated } : e)));
+      setToast(`${selected.fullName} saved as “${ENQUIRY_META[next].label}”.`);
+      closeLead();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save this lead.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const counts = useMemo(() => {
+    const c = Object.fromEntries(ENQUIRY_STAGES.map((s) => [s, 0])) as Record<EnquiryStatus, number>;
+    enquiries.forEach((e) => c[enquiryStatus(e.status)]++);
+    return c;
   }, [enquiries]);
 
-  // Filtered list
-  const filteredEnquiries = useMemo(() => {
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return enquiries.filter((e) => {
-      const statusKey = getStatusKey(e.status);
-      if (statusFilter !== 'All' && statusKey !== statusFilter) return false;
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        const matchName = e.fullName.toLowerCase().includes(q);
-        const matchEmail = e.email.toLowerCase().includes(q);
-        const matchPhone = e.phone.toLowerCase().includes(q);
-        const matchCourse = e.interestedCourse.toLowerCase().includes(q);
-        if (!matchName && !matchEmail && !matchPhone && !matchCourse) return false;
-      }
-      return true;
+      if (filter !== 'All' && enquiryStatus(e.status) !== filter) return false;
+      if (!q) return true;
+      return [e.fullName, e.email, e.phone, e.interestedCourse, e.preferredLanguage].some((v) => v?.toLowerCase().includes(q));
     });
-  }, [enquiries, statusFilter, search]);
+  }, [enquiries, filter, search]);
+
+  const total = enquiries.length;
+  const conversion = total ? Math.round((counts.Enrolled / total) * 100) : 0;
 
   return (
-    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Page Header */}
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <h1 style={{ margin: 0 }}>Admissions & Leads Desk</h1>
-            <span
-              style={{
-                background: 'rgba(31, 126, 168, 0.12)',
-                color: 'var(--azure)',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-              }}
-            >
-              CRM Support
-            </span>
-          </div>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)' }}>
-            Review incoming public website enquiries, follow up with candidates, and convert enquiries into enrolled students.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => void loadEnquiries()}
-          disabled={loading}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-        >
-          🔄 Refresh
-        </button>
+    <div className="page">
+      <PageHeader
+        title="Admissions & Leads"
+        subtitle="Enquiries from the website contact form. Contact new leads quickly and keep each stage up to date."
+        actions={
+          <button type="button" className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
+            <Icon.Refresh size={17} /> Refresh
+          </button>
+        }
+      />
+
+      {toast && <Alert tone="success" onClose={() => setToast(null)}>{toast}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <div className="stats">
+        <StatCard icon="Inbox" tone="blue" label="All enquiries" value={total} />
+        <StatCard icon="Sparkles" tone="orange" label="New — not contacted" value={counts.New} />
+        <StatCard icon="Phone" tone="purple" label="In follow-up" value={counts.Contacted + counts.Qualified} />
+        <StatCard icon="CheckCircle" tone="green" label="Enrolled" value={counts.Enrolled} hint={`${conversion}% conversion`} />
       </div>
 
-      {feedback && <SuccessBox message={feedback} />}
-      {error && <ErrorBox message={error} />}
-
-      {/* KPI Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-        <div className="stat">
-          <span>Total Inquiries</span>
-          <strong>{metrics.total}</strong>
-        </div>
-        <div
-          className="stat"
-          style={{
-            borderLeft: '4px solid #0284c7',
-            background: 'linear-gradient(165deg, rgba(2, 132, 199, 0.06), rgba(255, 255, 255, 0.9))',
-          }}
-        >
-          <span style={{ color: '#0369a1', fontWeight: 600 }}>New (Uncontacted)</span>
-          <strong style={{ color: '#0369a1' }}>{metrics.newCount}</strong>
-        </div>
-        <div
-          className="stat"
-          style={{
-            borderLeft: '4px solid #d97706',
-            background: 'linear-gradient(165deg, rgba(217, 119, 6, 0.06), rgba(255, 255, 255, 0.9))',
-          }}
-        >
-          <span style={{ color: '#b45309', fontWeight: 600 }}>In Follow-Up</span>
-          <strong style={{ color: '#b45309' }}>{metrics.contacted}</strong>
-        </div>
-        <div
-          className="stat"
-          style={{
-            borderLeft: '4px solid #9333ea',
-            background: 'linear-gradient(165deg, rgba(147, 51, 234, 0.06), rgba(255, 255, 255, 0.9))',
-          }}
-        >
-          <span style={{ color: '#7e22ce', fontWeight: 600 }}>Qualified Leads</span>
-          <strong style={{ color: '#7e22ce' }}>{metrics.qualified}</strong>
-        </div>
-        <div
-          className="stat"
-          style={{
-            borderLeft: '4px solid #16a34a',
-            background: 'linear-gradient(165deg, rgba(22, 163, 74, 0.06), rgba(255, 255, 255, 0.9))',
-          }}
-        >
-          <span style={{ color: '#15803d', fontWeight: 600 }}>Enrolled ({metrics.conversionRate}%)</span>
-          <strong style={{ color: '#15803d' }}>{metrics.enrolled}</strong>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div
-        className="panel"
-        style={{
-          padding: '1rem 1.25rem',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        {/* Status Filter Tabs */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-          {(['All', 'New', 'Contacted', 'Qualified', 'Enrolled', 'Closed'] as const).map((st) => {
-            const isActive = statusFilter === st;
-            let count = metrics.total;
-            if (st === 'New') count = metrics.newCount;
-            if (st === 'Contacted') count = metrics.contacted;
-            if (st === 'Qualified') count = metrics.qualified;
-            if (st === 'Enrolled') count = metrics.enrolled;
-            if (st === 'Closed') count = metrics.closed;
-
-            return (
+      <section className="card">
+        <div className="card-head toolbar">
+          <div className="chips" role="tablist" aria-label="Filter by stage">
+            {(['All', ...ENQUIRY_STAGES] as Filter[]).map((s) => (
               <button
-                key={st}
+                key={s}
                 type="button"
-                onClick={() => setStatusFilter(st)}
-                style={{
-                  padding: '0.42rem 0.85rem',
-                  borderRadius: '8px',
-                  border: isActive ? '1px solid var(--azure)' : '1px solid var(--line)',
-                  background: isActive ? 'var(--azure)' : 'var(--paper)',
-                  color: isActive ? '#ffffff' : 'var(--ink)',
-                  fontSize: '0.86rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  transition: 'all 0.15s ease',
-                }}
+                role="tab"
+                aria-selected={filter === s}
+                className={`chip ${filter === s ? 'active' : ''}`}
+                onClick={() => setFilter(s)}
               >
-                <span>{st}</span>
-                <span
-                  style={{
-                    background: isActive ? 'rgba(255, 255, 255, 0.25)' : 'rgba(11, 31, 51, 0.08)',
-                    borderRadius: '10px',
-                    padding: '0.1rem 0.45rem',
-                    fontSize: '0.74rem',
-                  }}
-                >
-                  {count}
-                </span>
+                {s === 'All' ? 'All' : ENQUIRY_META[s].label}
+                <span className="count">{s === 'All' ? total : counts[s]}</span>
               </button>
-            );
-          })}
+            ))}
+          </div>
+          <label className="search">
+            <Icon.Search size={17} />
+            <input className="input" type="search" placeholder="Search name, email, phone, course…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
         </div>
 
-        {/* Search Input */}
-        <div style={{ minWidth: '240px', flex: '1 1 240px', maxWidth: '360px' }}>
-          <input
-            type="search"
-            placeholder="Search candidate, email, course..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.5rem 0.85rem',
-              borderRadius: '8px',
-              border: '1px solid var(--line)',
-              background: 'var(--paper)',
-              fontSize: '0.9rem',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Main Table / List */}
-      <div className="panel" style={{ padding: '0', overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ padding: '2rem' }}>
-            <Loading label="Loading incoming enquiries…" />
-          </div>
-        ) : filteredEnquiries.length === 0 ? (
-          <div style={{ padding: '2.5rem' }}>
-            <Empty label={search || statusFilter !== 'All' ? 'No enquiries match your filter.' : 'No website enquiries received yet.'} />
-          </div>
+          <Spinner label="Loading enquiries…" />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon={search || filter !== 'All' ? 'Search' : 'Inbox'}
+            title={search || filter !== 'All' ? 'No enquiries match' : 'No enquiries yet'}
+            text={search || filter !== 'All' ? 'Try another stage or search word.' : 'New messages from the website contact form will appear here.'}
+          />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table" style={{ margin: 0 }}>
+          <div className="table-wrap">
+            <table className="table table-cards">
               <thead>
-                <tr style={{ background: 'var(--sand)' }}>
-                  <th style={{ paddingLeft: '1.25rem' }}>Candidate</th>
-                  <th>Contact Info</th>
-                  <th>Course Interest</th>
-                  <th>Status</th>
-                  <th>Assigned Staff</th>
-                  <th>Staff Follow-up Notes</th>
-                  <th>Date</th>
-                  <th style={{ textAlign: 'right', paddingRight: '1.25rem' }}>Action</th>
+                <tr>
+                  <th>Candidate</th>
+                  <th>Contact</th>
+                  <th>Interested in</th>
+                  <th>Stage</th>
+                  <th>Owner</th>
+                  <th>Received</th>
+                  <th aria-label="Open" />
                 </tr>
               </thead>
               <tbody>
-                {filteredEnquiries.map((item) => {
-                  const statusKey = getStatusKey(item.status);
-                  const cfg = STATUS_CONFIG[statusKey] || STATUS_CONFIG.New;
-                  const dateStr = new Date(item.createdAtUtc).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  });
-
+                {visible.map((e) => {
+                  const s = enquiryStatus(e.status);
                   return (
-                    <tr key={item.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ paddingLeft: '1.25rem' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--ink)' }}>{item.fullName}</div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', gap: '0.4rem', marginTop: '2px' }}>
-                          <span style={{ background: 'rgba(11, 31, 51, 0.06)', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>
-                            {item.preferredLanguage || 'English'}
-                          </span>
+                    <tr key={e.id} className="is-clickable" onClick={() => openLead(e)}>
+                      <td data-label="Candidate">
+                        <Person name={e.fullName} sub={e.preferredLanguage || 'English'} />
+                      </td>
+                      <td data-label="Contact">
+                        <div className="contact-cell">
+                          <a href={`mailto:${e.email}`} onClick={(ev) => ev.stopPropagation()} title={e.email}>{e.email}</a>
+                          <a href={`tel:${e.phone}`} onClick={(ev) => ev.stopPropagation()} className="muted">{e.phone}</a>
                         </div>
                       </td>
-                      <td>
-                        <div style={{ fontSize: '0.86rem' }}>
-                          <a
-                            href={`mailto:${item.email}`}
-                            style={{ color: 'var(--azure)', textDecoration: 'none', display: 'block' }}
-                          >
-                            ✉️ {item.email}
-                          </a>
-                          <a
-                            href={`tel:${item.phone}`}
-                            style={{ color: 'var(--ink-soft)', textDecoration: 'none', display: 'block', marginTop: '2px' }}
-                          >
-                            📞 {item.phone}
-                          </a>
-                        </div>
+                      <td data-label="Interested in"><span className="strong">{e.interestedCourse}</span></td>
+                      <td data-label="Stage"><span className={`badge badge-dot badge-${ENQUIRY_META[s].tone}`}>{ENQUIRY_META[s].label}</span></td>
+                      <td data-label="Owner">
+                        {e.assignedStaffName ? <span className="small">{e.assignedStaffName}</span> : <span className="muted small">Unassigned</span>}
                       </td>
-                      <td>
-                        <strong style={{ fontSize: '0.88rem', color: 'var(--ink)' }}>
-                          {item.interestedCourse}
-                        </strong>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '0.22rem 0.65rem',
-                            borderRadius: '999px',
-                            fontSize: '0.76rem',
-                            fontWeight: 700,
-                            color: cfg.color,
-                            backgroundColor: cfg.bg,
-                            border: `1px solid ${cfg.border}`,
-                          }}
-                        >
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ fontSize: '0.85rem', color: item.assignedStaffName ? 'var(--ink)' : 'var(--muted)' }}>
-                          {item.assignedStaffName ? `👤 ${item.assignedStaffName}` : '— Unassigned —'}
-                        </div>
-                      </td>
-                      <td style={{ maxWidth: '240px' }}>
-                        {item.staffNotes ? (
-                          <div
-                            style={{
-                              fontSize: '0.82rem',
-                              color: 'var(--ink-soft)',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              lineHeight: 1.4,
-                            }}
-                            title={item.staffNotes}
-                          >
-                            💬 {item.staffNotes}
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontStyle: 'italic' }}>
-                            No notes logged
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: '0.82rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                        {dateStr}
-                      </td>
-                      <td style={{ textAlign: 'right', paddingRight: '1.25rem', whiteSpace: 'nowrap' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
-                          onClick={() => openManageModal(item)}
-                        >
-                          Manage Lead →
+                      <td data-label="Received" className="nowrap muted small" title={formatDate(e.createdAtUtc, true)}>{timeAgo(e.createdAtUtc)}</td>
+                      <td className="actions">
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={(ev) => { ev.stopPropagation(); openLead(e); }}>
+                          Open
                         </button>
                       </td>
                     </tr>
@@ -430,270 +205,83 @@ export function EnquiriesPage() {
             </table>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Lead Management Modal Drawer */}
-      {selectedEnquiry &&
-        createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(6, 18, 32, 0.75)',
-              backdropFilter: 'blur(6px)',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 99999,
-              padding: '1rem',
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) closeManageModal();
-            }}
-          >
-            <div
-              className="animate-rise"
-              style={{
-                background: 'var(--card-bg)',
-                borderRadius: '16px',
-                maxWidth: '680px',
-                width: '100%',
-                maxHeight: '90vh',
-                overflowY: 'auto',
-                boxShadow: '0 24px 64px rgba(0, 0, 0, 0.45)',
-                border: '1px solid var(--card-border)',
-                padding: '1.75rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1.25rem',
-              }}
-            >
-              {/* Modal Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <span
-                    style={{
-                      fontSize: '0.75rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      fontWeight: 700,
-                      color: 'var(--azure)',
-                    }}
+      <Modal
+        open={!!selected}
+        onClose={closeLead}
+        drawer
+        title={selected?.fullName}
+        subtitle={selected ? `Enquiry received ${formatDate(selected.createdAtUtc, true)}` : undefined}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={closeLead} disabled={saving}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </>
+        }
+      >
+        {selected && (
+          <div className="lead">
+            {saveError && <Alert tone="error">{saveError}</Alert>}
+
+            <div className="lead-contact">
+              <a className="btn btn-secondary" href={`tel:${selected.phone}`}><Icon.Phone size={17} /> Call</a>
+              <a className="btn btn-secondary" href={`https://wa.me/${digits(selected.phone)}`} target="_blank" rel="noreferrer"><Icon.WhatsApp size={17} /> WhatsApp</a>
+              <a className="btn btn-secondary" href={`mailto:${selected.email}`}><Icon.Mail size={17} /> Email</a>
+            </div>
+
+            <dl className="dl">
+              <div><dt>Interested in</dt><dd>{selected.interestedCourse}</dd></div>
+              <div><dt>Preferred language</dt><dd>{selected.preferredLanguage || 'English'}</dd></div>
+              <div><dt>Email</dt><dd>{selected.email}</dd></div>
+              <div><dt>Phone / WhatsApp</dt><dd>{selected.phone}</dd></div>
+              <div><dt>Owner</dt><dd>{selected.assignedStaffName || `Unassigned — saving makes ${user?.firstName || 'you'} the owner`}</dd></div>
+              <div><dt>Last updated</dt><dd>{selected.updatedAtUtc ? timeAgo(selected.updatedAtUtc) : 'Never'}</dd></div>
+            </dl>
+
+            <div>
+              <div className="label">Their message</div>
+              <blockquote className="lead-message">{selected.message || 'No message.'}</blockquote>
+            </div>
+
+            <div>
+              <div className="label">Stage</div>
+              <div className="stage-picker" role="radiogroup" aria-label="Stage">
+                {ENQUIRY_STAGES.map((s, i) => (
+                  <button
+                    key={s}
+                    type="button"
+                    role="radio"
+                    aria-checked={stage === s}
+                    className={`stage tone-${ENQUIRY_META[s].tone} ${stage === s ? 'active' : ''}`}
+                    onClick={() => setStage(s)}
                   >
-                    Candidate Profile & Lead Conversion
-                  </span>
-                  <h2 style={{ margin: '0.2rem 0 0', fontSize: '1.5rem', color: 'var(--ink)' }}>
-                    {selectedEnquiry.fullName}
-                  </h2>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '2px' }}>
-                    Submitted on {new Date(selectedEnquiry.createdAtUtc).toLocaleString()}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeManageModal}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    fontSize: '1.5rem',
-                    cursor: 'pointer',
-                    color: 'var(--muted)',
-                    lineHeight: 1,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Quick Contact & Details Grid */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                  gap: '0.85rem',
-                  background: 'var(--sand)',
-                  padding: '1rem',
-                  borderRadius: '10px',
-                  border: '1px solid var(--card-border)',
-                }}
-              >
-              <div>
-                <small style={{ color: 'var(--muted)', display: 'block', fontSize: '0.78rem' }}>Course Interested</small>
-                <strong style={{ fontSize: '0.92rem', color: 'var(--ink)' }}>{selectedEnquiry.interestedCourse}</strong>
-              </div>
-              <div>
-                <small style={{ color: 'var(--muted)', display: 'block', fontSize: '0.78rem' }}>Preferred Language</small>
-                <strong style={{ fontSize: '0.92rem', color: 'var(--ink)' }}>{selectedEnquiry.preferredLanguage || 'English'}</strong>
-              </div>
-              <div>
-                <small style={{ color: 'var(--muted)', display: 'block', fontSize: '0.78rem' }}>Email Address</small>
-                <a href={`mailto:${selectedEnquiry.email}`} style={{ color: 'var(--azure)', fontWeight: 600, fontSize: '0.92rem' }}>
-                  {selectedEnquiry.email}
-                </a>
-              </div>
-              <div>
-                <small style={{ color: 'var(--muted)', display: 'block', fontSize: '0.78rem' }}>Phone / WhatsApp</small>
-                <a href={`tel:${selectedEnquiry.phone}`} style={{ color: 'var(--ink-soft)', fontWeight: 600, fontSize: '0.92rem' }}>
-                  {selectedEnquiry.phone}
-                </a>
+                    <span className="stage-num">{stage === s ? <Icon.Check size={14} /> : i + 1}</span>
+                    <span>
+                      <strong>{ENQUIRY_META[s].label}</strong>
+                      <small>{ENQUIRY_META[s].help}</small>
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Candidate Original Message */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--ink-soft)' }}>
-                Website Message from Applicant:
-              </label>
-              <div
-                style={{
-                  background: 'var(--sand)',
-                  border: '1px solid var(--line)',
-                  borderLeft: '4px solid var(--azure)',
-                  padding: '0.9rem 1.1rem',
-                  borderRadius: '8px',
-                  fontStyle: 'italic',
-                  color: 'var(--ink)',
-                  fontSize: '0.94rem',
-                  lineHeight: 1.55,
-                }}
-              >
-                "{selectedEnquiry.message}"
-              </div>
-            </div>
-
-            {/* Pipeline Stage Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--ink-soft)' }}>
-                Lead Pipeline Status:
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {(['New', 'Contacted', 'Qualified', 'Enrolled', 'Closed'] as const).map((st) => {
-                  const isSelected = newStatus === st;
-                  const cfg = STATUS_CONFIG[st];
-                  return (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setNewStatus(st)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        borderRadius: '8px',
-                        border: isSelected ? `2px solid ${cfg.color}` : '1px solid var(--line)',
-                        background: isSelected ? cfg.bg : 'var(--paper)',
-                        color: isSelected ? cfg.color : 'var(--muted)',
-                        fontWeight: isSelected ? 700 : 500,
-                        fontSize: '0.88rem',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      {isSelected ? '● ' : '○ '}
-                      {cfg.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Staff Internal Notes */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--ink-soft)' }}>
-                Internal Staff Notes & Log:
-              </label>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="lead-notes">Notes</label>
               <textarea
-                rows={4}
-                placeholder="Log your conversation, WhatsApp calls, student availability, fee discussions, or next steps here..."
-                value={staffNotes}
-                onChange={(e) => setStaffNotes(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '8px',
-                  border: '1px solid var(--line)',
-                  background: 'var(--input-bg)',
-                  color: 'var(--ink)',
-                  fontSize: '0.92rem',
-                  lineHeight: 1.5,
-                }}
+                id="lead-notes"
+                rows={5}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Calls, WhatsApp messages, availability, visa situation, next step…"
               />
-              <small style={{ color: 'var(--muted)' }}>
-                Logged by: <strong>{user?.fullName || 'Elena Moretti (Staff)'}</strong>
-              </small>
-            </div>
-
-            {/* Modal Actions */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingTop: '0.75rem',
-                borderTop: '1px solid var(--line)',
-                gap: '0.75rem',
-              }}
-            >
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {newStatus !== 'Contacted' && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem' }}
-                    onClick={() => void handleUpdateStatus('Contacted')}
-                    disabled={savingStatus}
-                  >
-                    Quick: Mark Contacted
-                  </button>
-                )}
-                {newStatus !== 'Qualified' && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem' }}
-                    onClick={() => void handleUpdateStatus('Qualified')}
-                    disabled={savingStatus}
-                  >
-                    Quick: Qualify Lead
-                  </button>
-                )}
-                {newStatus !== 'Enrolled' && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem', borderColor: '#16a34a', color: '#15803d' }}
-                    onClick={() => void handleUpdateStatus('Enrolled')}
-                    disabled={savingStatus}
-                  >
-                    Quick: Mark Enrolled
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.6rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={closeManageModal}
-                  disabled={savingStatus}
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-azure"
-                  onClick={() => void handleUpdateStatus()}
-                  disabled={savingStatus}
-                >
-                  {savingStatus ? 'Saving changes…' : 'Save Lead & Notes'}
-                </button>
-              </div>
+              <span className="hint">Only the team can see these notes.</span>
             </div>
           </div>
-        </div>,
-        document.body
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

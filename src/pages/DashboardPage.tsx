@@ -1,284 +1,309 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Empty, ErrorBox, Loading } from '../components/StateBlock';
+import { Icon } from '../components/Icons';
+import { Alert, EmptyState, Person, Spinner, StatCard, formatDate, timeAgo } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
-import { announcementsApi, dashboardApi } from '../services/platformApi';
-import {
-  roleLabel,
-  type AdminDashboard,
-  type Announcement,
-  type MentorDashboard,
-  type StaffDashboard,
-  type SuperAdminDashboard,
+import { CLASS_META, ENQUIRY_META, ENQUIRY_STAGES, classStatus, enquiryStatus, isUpcoming } from '../lib/status';
+import { announcementsApi, classesApi, coursesApi, dashboardApi, enquiriesApi } from '../services/platformApi';
+import type {
+  AdminDashboard,
+  Announcement,
+  ClassSession,
+  Course,
+  Enquiry,
+  MentorDashboard,
+  StaffDashboard,
+  SuperAdminDashboard,
 } from '../types';
+import './pages.css';
 
 /* ────────────────────────────────────────────────────────────────────────────
- * One dashboard per role:
- *   Super Admin → team overview + operations
- *   Admin       → operations (courses, classes, leads)
- *   Staff       → admissions & leads pipeline
- *   Teacher     → own classes, courses and students   (internal role: Mentor)
+ * One dashboard per role, built around "what needs attention today":
+ *   Super Admin → team + operations + leads + classes
+ *   Admin       → operations + leads + classes
+ *   Staff       → admissions pipeline + new leads
+ *   Teacher     → own classes + courses           (internal role: Mentor)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-type Metric = { label: string; val: number | string; color: string; bg: string; icon: string };
-type QuickLink = { to: string; icon: string; tag: string; tagColor: string; title: string; desc: string; cta: string };
-
-const QUICK = {
-  team: { to: '/app/users', icon: '👥', tag: 'Super Admin', tagColor: '#7C3AED', title: 'Users & Roles', desc: 'Create Admin, Staff and Teacher accounts, change roles, and suspend access.', cta: 'Manage team →' },
-  leads: { to: '/app/enquiries', icon: '🎯', tag: 'Pipeline', tagColor: '#16A34A', title: 'Admissions & Leads', desc: 'Website contact-form enquiries. Follow up, update status, and note each call.', cta: 'Open admissions desk →' },
-  courses: { to: '/app/courses', icon: '📚', tag: 'Curriculum', tagColor: '#1E88E5', title: 'Courses & Content', desc: 'Build modules, chapters and lessons, upload videos and PDFs, and publish to students.', cta: 'Manage courses →' },
-  classes: { to: '/app/classes', icon: '🎥', tag: 'Live', tagColor: '#D97706', title: 'Live Classes', desc: 'Schedule live Italian classes, share join links and track attendance.', cta: 'View classes →' },
-  notify: { to: '/app/notifications', icon: '🔔', tag: 'Comms', tagColor: '#EC4899', title: 'Notifications', desc: 'Send updates to students about classes, tests and announcements.', cta: 'Send a notification →' },
-  audit: { to: '/app/audit', icon: '🛡️', tag: 'Security', tagColor: '#475569', title: 'Audit Log', desc: 'See who logged in and what changed across the platform.', cta: 'Open audit log →' },
-} satisfies Record<string, QuickLink>;
-
-function operationsMetrics(o: AdminDashboard): Metric[] {
-  return [
-    { label: 'Students', val: o.totalStudents, color: '#0284C7', bg: '#EFF6FF', icon: '🎓' },
-    { label: 'Published Courses', val: `${o.publishedCourses} / ${o.totalCourses}`, color: '#16A34A', bg: '#F0FDF4', icon: '📚' },
-    { label: 'Active Enrollments', val: o.activeEnrollments, color: '#8B5CF6', bg: '#F5F3FF', icon: '✅' },
-    { label: 'Upcoming Classes', val: o.upcomingClasses, color: '#D97706', bg: '#FFFBEB', icon: '🎥' },
-    { label: 'New Leads', val: o.newEnquiries, color: '#0369A1', bg: '#E0F2FE', icon: '✨' },
-    { label: 'In Follow-Up', val: o.inFollowUpEnquiries, color: '#B45309', bg: '#FEF3C7', icon: '⏳' },
-    { label: 'Enrolled Leads', val: o.enrolledEnquiries, color: '#059669', bg: '#ECFDF5', icon: '🎉' },
-  ];
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera';
 }
 
 export function DashboardPage() {
   const { user, hasRole } = useAuth();
-  const [superAdmin, setSuperAdmin] = useState<SuperAdminDashboard | null>(null);
-  const [admin, setAdmin] = useState<AdminDashboard | null>(null);
-  const [teacher, setTeacher] = useState<MentorDashboard | null>(null);
-  const [staff, setStaff] = useState<StaffDashboard | null>(null);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const isSuperAdmin = hasRole('SuperAdmin');
   const isAdmin = hasRole('Admin');
   const isStaff = hasRole('Staff');
   const isTeacher = hasRole('Mentor');
+  const canLeads = isSuperAdmin || isAdmin || isStaff;
+  const canTeach = isSuperAdmin || isAdmin || isTeacher;
+
+  const [superAdmin, setSuperAdmin] = useState<SuperAdminDashboard | null>(null);
+  const [admin, setAdmin] = useState<AdminDashboard | null>(null);
+  const [teacher, setTeacher] = useState<MentorDashboard | null>(null);
+  const [staff, setStaff] = useState<StaffDashboard | null>(null);
+  const [leads, setLeads] = useState<Enquiry[]>([]);
+  const [classes, setClasses] = useState<ClassSession[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     void (async () => {
       setLoading(true);
       setError(null);
       try {
-        const [notes] = await Promise.all([
+        const stats = isSuperAdmin
+          ? dashboardApi.superAdmin().then((d) => alive && setSuperAdmin(d))
+          : isAdmin
+            ? dashboardApi.admin().then((d) => alive && setAdmin(d))
+            : isStaff
+              ? dashboardApi.staff().then((d) => alive && setStaff(d))
+              : dashboardApi.mentor().then((d) => alive && setTeacher(d));
+        const [notes, leadList, classList, courseList] = await Promise.all([
           announcementsApi.list().catch(() => [] as Announcement[]),
-          isSuperAdmin
-            ? dashboardApi.superAdmin().then(setSuperAdmin)
-            : isAdmin
-              ? dashboardApi.admin().then(setAdmin)
-              : isStaff
-                ? dashboardApi.staff().then(setStaff)
-                : isTeacher
-                  ? dashboardApi.mentor().then(setTeacher)
-                  : Promise.resolve(),
+          canLeads ? enquiriesApi.list().catch(() => [] as Enquiry[]) : Promise.resolve([] as Enquiry[]),
+          canTeach ? classesApi.list().catch(() => [] as ClassSession[]) : Promise.resolve([] as ClassSession[]),
+          isTeacher ? coursesApi.list({ pageSize: 20 }).then((r) => r.items).catch(() => [] as Course[]) : Promise.resolve([] as Course[]),
+          stats,
         ]);
+        if (!alive) return;
         setAnnouncements(notes);
+        setLeads(leadList);
+        setClasses(classList);
+        setCourses(courseList);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load dashboard');
+        if (alive) setError(e instanceof Error ? e.message : 'Could not load the dashboard.');
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
-  }, [isSuperAdmin, isAdmin, isStaff, isTeacher]);
+    return () => {
+      alive = false;
+    };
+  }, [isSuperAdmin, isAdmin, isStaff, isTeacher, canLeads, canTeach]);
 
-  if (loading) return <Loading label="Loading your dashboard…" />;
-  if (error) return <ErrorBox message={error} />;
+  if (loading) return <Spinner label="Loading your dashboard…" />;
 
-  const view = isSuperAdmin
-    ? {
-        subtitle: 'You are the only Super Admin. Create team accounts and oversee everything.',
-        primary: { to: '/app/users', label: '👥 Add Team Member' },
-        secondary: { to: '/app/enquiries', label: '🎯 Admissions Desk' },
-        links: [QUICK.team, QUICK.leads, QUICK.courses, QUICK.classes, QUICK.notify, QUICK.audit],
-      }
+  const ops = superAdmin?.operations ?? admin;
+  const newLeads = leads
+    .filter((l) => enquiryStatus(l.status) === 'New')
+    .sort((a, b) => +new Date(b.createdAtUtc) - +new Date(a.createdAtUtc));
+  const followUps = leads.filter((l) => ['Contacted', 'Qualified'].includes(enquiryStatus(l.status)));
+  const upcoming = classes.filter(isUpcoming).sort((a, b) => +new Date(a.scheduledAtUtc) - +new Date(b.scheduledAtUtc));
+
+  const subtitle = isSuperAdmin
+    ? 'Here’s an overview of your team, admissions and teaching.'
     : isAdmin
-      ? {
-          subtitle: 'Operations overview: courses, live classes and admissions.',
-          primary: { to: '/app/courses', label: '📚 Manage Courses' },
-          secondary: { to: '/app/enquiries', label: '🎯 Admissions Desk' },
-          links: [QUICK.leads, QUICK.courses, QUICK.classes, QUICK.notify],
-        }
+      ? 'Here’s what’s happening with admissions and teaching today.'
       : isStaff
-        ? {
-            subtitle: 'Website enquiries waiting for you. Contact new leads and keep their status up to date.',
-            primary: { to: '/app/enquiries', label: '🎯 Open Admissions Desk' },
-            secondary: null,
-            links: [QUICK.leads],
-          }
-        : {
-            subtitle: 'Your classes, courses and students.',
-            primary: { to: '/app/classes', label: '🎥 My Live Classes' },
-            secondary: { to: '/app/courses', label: '📚 Courses & Content' },
-            links: [QUICK.classes, QUICK.courses, QUICK.notify],
-          };
-
-  const canSendNotifications = isSuperAdmin || isAdmin || isTeacher;
+        ? newLeads.length
+          ? `You have ${newLeads.length} new ${newLeads.length === 1 ? 'enquiry' : 'enquiries'} waiting for a first call.`
+          : 'All new enquiries have been contacted. Nice work!'
+        : upcoming.length
+          ? `Your next class is ${timeAgo(upcoming[0].scheduledAtUtc)}.`
+          : 'No live classes booked yet — schedule your next one.';
 
   return (
-    <div
-      className="animate-rise"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1.75rem',
-        fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
-    >
-      {/* ── Page Header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+    <div className="page">
+      <div className="page-head">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--ink)', margin: 0, letterSpacing: '-0.4px' }}>
-              Welcome back, {user?.firstName || 'there'}
-            </h1>
-            <span
-              style={{
-                background: 'var(--primary-light)',
-                color: 'var(--primary)',
-                padding: '3px 10px',
-                borderRadius: '9999px',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-              }}
-            >
-              {roleLabel(user?.role)}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: '3px', margin: '6px 0 6px 0' }}>
-            <span style={{ width: '28px', height: '3.5px', background: '#008C45', borderRadius: '2px' }} />
-            <span style={{ width: '28px', height: '3.5px', background: 'var(--line)', borderRadius: '2px' }} />
-            <span style={{ width: '28px', height: '3.5px', background: '#CD212A', borderRadius: '2px' }} />
-          </div>
-          <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.92rem' }}>{view.subtitle}</p>
+          <div className="dash-hello">{greeting()}, {user?.firstName || 'there'}!</div>
+          <h1>Today at SS Europa</h1>
+          <p>{subtitle}</p>
         </div>
-
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <Link to={view.primary.to} style={primaryBtn}>
-            <span>{view.primary.label}</span>
-          </Link>
-          {view.secondary && (
-            <Link to={view.secondary.to} style={secondaryBtn}>
-              <span>{view.secondary.label}</span>
-            </Link>
+        <div className="page-actions">
+          {isSuperAdmin && (
+            <Link to="/app/users" className="btn btn-primary"><Icon.UserPlus size={18} /> Add team member</Link>
+          )}
+          {isAdmin && (
+            <Link to="/app/courses" className="btn btn-primary"><Icon.Book size={18} /> Manage courses</Link>
+          )}
+          {isStaff && (
+            <Link to="/app/enquiries" className="btn btn-primary"><Icon.Inbox size={18} /> Open admissions</Link>
+          )}
+          {isTeacher && (
+            <Link to="/app/classes" className="btn btn-primary"><Icon.Plus size={18} /> Schedule a class</Link>
           )}
         </div>
       </div>
 
-      {/* ── Super Admin: team + operations ── */}
-      {superAdmin && (
-        <>
-          <Section title="Your team">
-            <MetricGrid
-              metrics={[
-                { label: 'Admins', val: superAdmin.admins, color: '#7C3AED', bg: '#F5F3FF', icon: '🛡️' },
-                { label: 'Staff', val: superAdmin.staff, color: '#0284C7', bg: '#EFF6FF', icon: '🗂️' },
-                { label: 'Teachers', val: superAdmin.teachers, color: '#16A34A', bg: '#F0FDF4', icon: '👩‍🏫' },
-                { label: 'Suspended Accounts', val: superAdmin.suspendedTeamAccounts, color: '#DC2626', bg: '#FEF2F2', icon: '⛔' },
-              ]}
-            />
-          </Section>
-          <Section title="Operations">
-            <MetricGrid metrics={operationsMetrics(superAdmin.operations)} />
-          </Section>
-        </>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
 
-      {/* ── Admin: operations ── */}
-      {admin && (
-        <Section title="Operations">
-          <MetricGrid metrics={operationsMetrics(admin)} />
-        </Section>
+      {/* ── Key numbers ── */}
+      {ops && (
+        <div className="stats">
+          <StatCard icon="Cap" tone="blue" label="Students" value={ops.totalStudents} hint={`${ops.activeEnrollments} active enrolments`} />
+          <StatCard icon="Inbox" tone="orange" label="New leads" value={ops.newEnquiries} hint={`${ops.inFollowUpEnquiries} in follow-up`} to="/app/enquiries" />
+          <StatCard icon="Video" tone="purple" label="Upcoming classes" value={ops.upcomingClasses} to="/app/classes" />
+          <StatCard icon="Book" tone="green" label="Published courses" value={`${ops.publishedCourses}/${ops.totalCourses}`} to="/app/courses" />
+        </div>
       )}
-
-      {/* ── Staff: admissions pipeline ── */}
       {staff && (
-        <Section title="Admissions pipeline">
-          <MetricGrid
-            metrics={[
-              { label: 'Total Enquiries', val: staff.totalEnquiries, color: '#0284C7', bg: '#EFF6FF', icon: '📋' },
-              { label: 'New (Not Contacted)', val: staff.newEnquiries, color: '#16A34A', bg: '#F0FDF4', icon: '✨' },
-              { label: 'In Follow-Up', val: staff.inFollowUpEnquiries, color: '#D97706', bg: '#FFFBEB', icon: '⏳' },
-              { label: 'Enrolled', val: staff.enrolledEnquiries, color: '#059669', bg: '#ECFDF5', icon: '🎉' },
-              { label: 'Closed', val: staff.closedEnquiries, color: '#475569', bg: '#F1F5F9', icon: '📁' },
-            ]}
-          />
-        </Section>
+        <div className="stats">
+          <StatCard icon="Inbox" tone="blue" label="All enquiries" value={staff.totalEnquiries} />
+          <StatCard icon="Sparkles" tone="orange" label="New — call first" value={staff.newEnquiries} />
+          <StatCard icon="Phone" tone="purple" label="In follow-up" value={staff.inFollowUpEnquiries} />
+          <StatCard icon="CheckCircle" tone="green" label="Enrolled" value={staff.enrolledEnquiries} hint={staff.totalEnquiries ? `${Math.round((staff.enrolledEnquiries / staff.totalEnquiries) * 100)}% conversion` : undefined} />
+        </div>
       )}
-
-      {/* ── Teacher: own classes ── */}
       {teacher && (
-        <Section title="Your teaching">
-          <MetricGrid
-            metrics={[
-              { label: 'Upcoming Classes', val: teacher.upcomingClasses, color: '#D97706', bg: '#FFFBEB', icon: '🎥' },
-              { label: 'My Courses', val: teacher.coursesTaught, color: '#1E88E5', bg: '#EFF6FF', icon: '📚' },
-              { label: 'My Students', val: teacher.assignedStudents, color: '#16A34A', bg: '#F0FDF4', icon: '🎓' },
-              { label: 'Materials', val: teacher.materials, color: '#8B5CF6', bg: '#F5F3FF', icon: '📎' },
-              { label: 'Classes Taught', val: teacher.pendingAttendance, color: '#059669', bg: '#ECFDF5', icon: '✅' },
-            ]}
-          />
-        </Section>
+        <div className="stats">
+          <StatCard icon="Video" tone="purple" label="Upcoming classes" value={teacher.upcomingClasses} to="/app/classes" />
+          <StatCard icon="Book" tone="blue" label="My courses" value={teacher.coursesTaught} to="/app/courses" />
+          <StatCard icon="Cap" tone="green" label="My students" value={teacher.assignedStudents} />
+          <StatCard icon="CheckCircle" tone="teal" label="Classes taught" value={teacher.pendingAttendance} />
+        </div>
       )}
 
-      {/* ── Quick access (only pages this role can open) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
-        {view.links.map((q) => (
-          <QuickCard key={q.to} {...q} />
-        ))}
-      </div>
+      <div className="dash-grid">
+        <div className="dash-main">
+          {/* ── Leads needing a first call ── */}
+          {canLeads && (
+            <Card
+              title="New enquiries to contact"
+              subtitle="From the website contact form — call or WhatsApp them first."
+              action={<Link to="/app/enquiries" className="btn btn-ghost btn-sm">View all <Icon.ArrowRight size={16} /></Link>}
+            >
+              {newLeads.length === 0 ? (
+                <EmptyState icon="CheckCircle" title="You’re all caught up" text="Every new enquiry has been contacted." />
+              ) : (
+                <ul className="list">
+                  {newLeads.slice(0, isStaff ? 8 : 5).map((l) => (
+                    <li key={l.id}>
+                      <Link to={`/app/enquiries?open=${l.id}`} className="list-row">
+                        <Person name={l.fullName} sub={l.interestedCourse} />
+                        <span className="list-meta">
+                          <span className="muted xs">{timeAgo(l.createdAtUtc)}</span>
+                          <Icon.ChevronRight size={16} />
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
 
-      {/* ── Announcements Feed ── */}
-      <div
-        style={{
-          background: 'var(--card-bg)',
-          borderRadius: '18px',
-          border: '1px solid var(--card-border)',
-          padding: '1.5rem',
-          boxShadow: 'var(--shadow-sm)',
-          transition: 'background-color 200ms ease, border-color 200ms ease',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap' }}>
-          <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink)', margin: 0 }}>📢 Announcements</h2>
-            <p style={{ color: 'var(--muted)', fontSize: '0.86rem', margin: '3px 0 0' }}>
-              Notices shared with students and the team.
-            </p>
-          </div>
-          {canSendNotifications && (
-            <Link to="/app/notifications" style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>
-              Send notification →
-            </Link>
+          {/* ── Upcoming classes ── */}
+          {canTeach && (
+            <Card
+              title="Upcoming live classes"
+              subtitle="Join links open from the Live Classes page."
+              action={<Link to="/app/classes" className="btn btn-ghost btn-sm">All classes <Icon.ArrowRight size={16} /></Link>}
+            >
+              {upcoming.length === 0 ? (
+                <EmptyState
+                  icon="Calendar"
+                  title="No classes scheduled"
+                  text="Book the weekly speaking class so students can practise with a teacher."
+                  action={<Link to="/app/classes" className="btn btn-secondary btn-sm"><Icon.Plus size={16} /> Schedule a class</Link>}
+                />
+              ) : (
+                <ul className="list">
+                  {upcoming.slice(0, 5).map((c) => {
+                    const d = new Date(c.scheduledAtUtc);
+                    const s = classStatus(c);
+                    return (
+                      <li key={c.id} className="list-row">
+                        <span className="date-tile">
+                          <span>{d.toLocaleDateString(undefined, { month: 'short' })}</span>
+                          <strong>{d.getDate()}</strong>
+                        </span>
+                        <span className="list-main">
+                          <strong>{c.title}</strong>
+                          <span className="muted small">
+                            {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} · {c.durationMinutes} min · {c.courseTitle}
+                          </span>
+                        </span>
+                        <span className={`badge badge-dot badge-${CLASS_META[s].tone}`}>{s === 'Live' ? 'Live now' : timeAgo(c.scheduledAtUtc)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          )}
+
+          {/* ── Teacher: my courses ── */}
+          {isTeacher && (
+            <Card title="Courses" action={<Link to="/app/courses" className="btn btn-ghost btn-sm">Open <Icon.ArrowRight size={16} /></Link>}>
+              {courses.length === 0 ? (
+                <EmptyState icon="Book" title="No courses yet" />
+              ) : (
+                <ul className="list">
+                  {courses.slice(0, 5).map((c) => (
+                    <li key={c.id}>
+                      <Link to={`/app/courses/${c.id}`} className="list-row">
+                        <span className="list-main">
+                          <strong>{c.title}</strong>
+                          <span className="muted small">{c.cefrLevel ? `${c.cefrLevel} · ` : ''}{c.lessonsCount ?? 0} lessons · {c.enrolledCount} {c.enrolledCount === 1 ? 'student' : 'students'}</span>
+                        </span>
+                        <Icon.ChevronRight size={16} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
           )}
         </div>
 
-        {announcements.length === 0 ? (
-          <Empty label="No active announcements." />
-        ) : (
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {announcements.map((a) => (
-              <div
-                key={a.id}
-                style={{
-                  background: 'var(--sand)',
-                  borderRadius: '12px',
-                  border: '1px solid var(--card-border-subtle)',
-                  padding: '1rem 1.25rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                }}
-              >
-                <strong style={{ fontSize: '0.98rem', fontWeight: 700, color: 'var(--ink)' }}>{a.title}</strong>
-                <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.45 }}>{a.body}</p>
+        <div className="dash-side">
+          {/* ── Admissions pipeline ── */}
+          {canLeads && leads.length > 0 && (
+            <Card title="Admissions pipeline" subtitle={`${leads.length} enquiries · ${followUps.length} in follow-up`}>
+              <Pipeline leads={leads} />
+            </Card>
+          )}
+
+          {/* ── Super Admin: team ── */}
+          {superAdmin && (
+            <Card title="Your team" action={<Link to="/app/users" className="btn btn-ghost btn-sm">Manage <Icon.ArrowRight size={16} /></Link>}>
+              <div className="team-grid">
+                <TeamTile icon={<Icon.Shield size={18} />} tone="purple" label="Admins" value={superAdmin.admins} />
+                <TeamTile icon={<Icon.Inbox size={18} />} tone="blue" label="Staff" value={superAdmin.staff} />
+                <TeamTile icon={<Icon.Cap size={18} />} tone="green" label="Teachers" value={superAdmin.teachers} />
+                <TeamTile icon={<Icon.Pause size={18} />} tone="red" label="Suspended" value={superAdmin.suspendedTeamAccounts} />
               </div>
-            ))}
-          </div>
-        )}
+            </Card>
+          )}
+
+          {/* ── Announcements ── */}
+          <Card
+            title="Announcements"
+            action={canTeach ? <Link to="/app/notifications" className="btn btn-ghost btn-sm"><Icon.Send size={15} /> Send</Link> : undefined}
+          >
+            {announcements.length === 0 ? (
+              <EmptyState icon="Megaphone" title="No announcements" />
+            ) : (
+              <ul className="notes">
+                {announcements.slice(0, 4).map((a) => (
+                  <li key={a.id}>
+                    <strong>{a.title}</strong>
+                    <p>{a.body}</p>
+                    <span className="muted xs">{formatDate(a.createdAtUtc)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* ── Quick links ── */}
+          {(isSuperAdmin || isAdmin) && (
+            <Card title="Shortcuts">
+              <div className="shortcuts">
+                <Link to="/app/courses"><Icon.Book size={18} /> Course builder</Link>
+                <Link to="/app/classes"><Icon.Video size={18} /> Live classes</Link>
+                <Link to="/app/notifications"><Icon.Megaphone size={18} /> Send a notification</Link>
+                {isSuperAdmin && <Link to="/app/audit"><Icon.ShieldCheck size={18} /> Audit log</Link>}
+              </div>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -286,113 +311,53 @@ export function DashboardPage() {
 
 /* ── Building blocks ─────────────────────────────────────────────────────── */
 
-const primaryBtn: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '6px',
-  padding: '10px 18px',
-  background: '#1E88E5',
-  color: '#FFFFFF',
-  borderRadius: '10px',
-  fontWeight: 700,
-  fontSize: '0.9rem',
-  textDecoration: 'none',
-  boxShadow: '0 4px 14px rgba(30, 136, 229, 0.35)',
-};
-
-const secondaryBtn: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '6px',
-  padding: '10px 18px',
-  background: 'var(--paper)',
-  border: '1px solid var(--line)',
-  color: 'var(--ink)',
-  borderRadius: '10px',
-  fontWeight: 700,
-  fontSize: '0.9rem',
-  textDecoration: 'none',
-};
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Card({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <h2 style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
-        {title}
-      </h2>
-      {children}
+    <section className="card">
+      <div className="card-head">
+        <div>
+          <h2>{title}</h2>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="card-body">{children}</div>
     </section>
   );
 }
 
-function MetricGrid({ metrics }: { metrics: Metric[] }) {
+function TeamTile({ icon, tone, label, value }: { icon: ReactNode; tone: string; label: string; value: number }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '1rem' }}>
-      {metrics.map((m) => (
-        <div
-          key={m.label}
-          style={{
-            background: 'var(--card-bg)',
-            borderRadius: '16px',
-            border: '1px solid var(--card-border)',
-            padding: '1.25rem',
-            boxShadow: 'var(--shadow-sm)',
-            position: 'relative',
-            overflow: 'hidden',
-            transition: 'background-color 200ms ease, border-color 200ms ease',
-          }}
-        >
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: m.color }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {m.label}
-            </span>
-            <span style={{ fontSize: '1.1rem', background: m.bg, padding: '4px 8px', borderRadius: '8px' }}>{m.icon}</span>
-          </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: m.color, marginTop: '8px', letterSpacing: '-0.5px' }}>{m.val}</div>
-        </div>
-      ))}
+    <div className={`team-tile tone-${tone}`}>
+      <span className="stat-icon">{icon}</span>
+      <strong>{value}</strong>
+      <span>{label}</span>
     </div>
   );
 }
 
-function QuickCard({ to, icon, tag, tagColor, title, desc, cta }: QuickLink) {
+function Pipeline({ leads }: { leads: Enquiry[] }) {
+  const counts = ENQUIRY_STAGES.map((s) => ({ s, n: leads.filter((l) => enquiryStatus(l.status) === s).length }));
+  const total = leads.length || 1;
   return (
-    <Link
-      to={to}
-      style={{
-        background: 'var(--card-bg)',
-        borderRadius: '16px',
-        border: '1px solid var(--card-border)',
-        padding: '1.5rem',
-        textDecoration: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        boxShadow: 'var(--shadow-sm)',
-        transition: 'transform 0.18s ease, box-shadow 0.18s ease, background-color 200ms ease',
-      }}
-    >
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <span style={{ fontSize: '1.8rem' }}>{icon}</span>
-          <span
-            style={{
-              background: `${tagColor}1F`,
-              color: tagColor,
-              fontWeight: 700,
-              fontSize: '0.78rem',
-              padding: '4px 10px',
-              borderRadius: '9999px',
-            }}
-          >
-            {tag}
-          </span>
-        </div>
-        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--ink)', margin: '0 0 6px' }}>{title}</h3>
-        <p style={{ color: 'var(--muted)', fontSize: '0.88rem', margin: 0, lineHeight: 1.45 }}>{desc}</p>
+    <div className="pipeline">
+      <div className="pipeline-bar" role="img" aria-label="Enquiries by stage">
+        {counts.filter((c) => c.n > 0).map((c) => (
+          <span key={c.s} className={`tone-${ENQUIRY_META[c.s].tone}`} style={{ flexGrow: c.n }} title={`${c.s}: ${c.n}`} />
+        ))}
       </div>
-      <div style={{ marginTop: '1.25rem', color: tagColor, fontWeight: 700, fontSize: '0.88rem' }}>{cta}</div>
-    </Link>
+      <ul className="pipeline-legend">
+        {counts.map((c) => (
+          <li key={c.s}>
+            <Link to={`/app/enquiries?status=${c.s}`}>
+              <span className={`legend-dot tone-${ENQUIRY_META[c.s].tone}`} />
+              <span>{ENQUIRY_META[c.s].label}</span>
+              <strong>{c.n}</strong>
+              <span className="muted xs">{Math.round((c.n / total) * 100)}%</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

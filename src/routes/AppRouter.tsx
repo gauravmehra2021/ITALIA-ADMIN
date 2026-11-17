@@ -3,19 +3,16 @@ import { useAuth } from '../hooks/useAuth';
 import { AppLayout } from '../layouts/AppLayout';
 import { AiPage } from '../pages/AiPage';
 import { ClassesPage } from '../pages/ClassesPage';
-import { CourseDetailPage } from '../pages/CourseDetailPage';
+import { CourseBuilderPage } from '../pages/CourseBuilderPage';
+import { LessonEditorPage } from '../pages/LessonEditorPage';
 import { CoursesPage } from '../pages/CoursesPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EnquiriesPage } from '../pages/EnquiriesPage';
-import { LandingPage } from '../pages/LandingPage';
 import { LoginPage } from '../pages/LoginPage';
-import {
-  AdminPage,
-  AuditPage,
-  CertificatesPage,
-  NotificationsPage,
-  UsersPage,
-} from '../pages/MiscPages';
+import { AdminPage, CertificatesPage } from '../pages/MiscPages';
+import { AuditPage } from '../pages/AuditPage';
+import { NotificationsPage } from '../pages/NotificationsPage';
+import { UsersPage } from '../pages/UsersPage';
 import { ProgressPage } from '../pages/ProgressPage';
 import type { ReactNode } from 'react';
 import { PANEL_ROLES, type UserRole } from '../types';
@@ -36,7 +33,7 @@ function RoleGate({ roles, children }: { roles: UserRole[]; children: ReactNode 
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<Navigate to="/app" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/app"
@@ -67,7 +64,15 @@ export function AppRouter() {
           path="courses/:id"
           element={
             <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
-              <CourseDetailPage />
+              <CourseBuilderPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="courses/:id/lessons/:lessonId"
+          element={
+            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+              <LessonEditorPage />
             </RoleGate>
           }
         />

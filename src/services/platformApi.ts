@@ -234,3 +234,27 @@ export const enquiriesApi = {
   updateStatus: (id: string, data: UpdateEnquiryStatusRequest) =>
     api.put<Enquiry>(`/api/enquiries/${id}/status`, data),
 };
+
+// ── Course builder ─────────────────────────────────────────────────────────
+
+export const curriculumApi = {
+  outline: (courseId: string) => api.get<import('../types').CourseOutline>(`/api/curriculum/courses/${courseId}`),
+  students: (courseId: string) => api.get<import('../types').StudentCourseProgress[]>(`/api/curriculum/courses/${courseId}/students`),
+  publishAll: (courseId: string) => api.post(`/api/curriculum/courses/${courseId}/publish-all`),
+  illustrations: () => api.get<import('../types').Illustration[]>('/api/curriculum/illustrations'),
+
+  createUnit: (courseId: string, body: import('../types').SaveUnitRequest) =>
+    api.post<import('../types').CourseUnit>(`/api/curriculum/courses/${courseId}/units`, body),
+  updateUnit: (unitId: string, body: import('../types').SaveUnitRequest) =>
+    api.put<import('../types').CourseUnit>(`/api/curriculum/units/${unitId}`, body),
+  moveUnit: (unitId: string, direction: -1 | 1) => api.post(`/api/curriculum/units/${unitId}/move`, { direction }),
+  deleteUnit: (unitId: string) => api.delete(`/api/curriculum/units/${unitId}`),
+
+  lesson: (lessonId: string) => api.get<import('../types').LessonDetail>(`/api/curriculum/lessons/${lessonId}`),
+  createLesson: (unitId: string, body: import('../types').SaveLessonRequest) =>
+    api.post<import('../types').LessonDetail>(`/api/curriculum/units/${unitId}/lessons`, body),
+  updateLesson: (lessonId: string, body: import('../types').SaveLessonRequest) =>
+    api.put<import('../types').LessonDetail>(`/api/curriculum/lessons/${lessonId}`, body),
+  moveLesson: (lessonId: string, direction: -1 | 1) => api.post(`/api/curriculum/lessons/${lessonId}/move`, { direction }),
+  deleteLesson: (lessonId: string) => api.delete(`/api/curriculum/lessons/${lessonId}`),
+};
