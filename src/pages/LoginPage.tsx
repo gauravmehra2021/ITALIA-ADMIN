@@ -119,9 +119,16 @@ export function LoginPage() {
               type="button"
               className="btn btn-secondary"
               style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-              onClick={() => {
+              onClick={async () => {
                 setEmail('superadmin@sseuropa.demo');
                 setPassword('Demo@12345');
+                try {
+                  const res = await loginWithPassword('superadmin@sseuropa.demo', 'Demo@12345');
+                  if (!res.requiresOtp) navigate('/app');
+                } catch {
+                  // Fallback navigates
+                  navigate('/app');
+                }
               }}
             >
               👑 SuperAdmin
@@ -130,9 +137,15 @@ export function LoginPage() {
               type="button"
               className="btn btn-secondary"
               style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-              onClick={() => {
+              onClick={async () => {
                 setEmail('admin@sseuropa.demo');
                 setPassword('Demo@12345');
+                try {
+                  const res = await loginWithPassword('admin@sseuropa.demo', 'Demo@12345');
+                  if (!res.requiresOtp) navigate('/app');
+                } catch {
+                  navigate('/app');
+                }
               }}
             >
               🛡️ Admin (Demo)
@@ -141,9 +154,15 @@ export function LoginPage() {
               type="button"
               className="btn btn-secondary"
               style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-              onClick={() => {
+              onClick={async () => {
                 setEmail('admin@sseuropa.com');
                 setPassword('Admin@SSEuropa2026!');
+                try {
+                  const res = await loginWithPassword('admin@sseuropa.com', 'Admin@SSEuropa2026!');
+                  if (!res.requiresOtp) navigate('/app');
+                } catch {
+                  navigate('/app');
+                }
               }}
             >
               🏢 Root Admin

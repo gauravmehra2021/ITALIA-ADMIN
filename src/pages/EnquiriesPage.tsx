@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Empty, ErrorBox, Loading, SuccessBox } from '../components/StateBlock';
 import { useAuth } from '../hooks/useAuth';
 import { enquiriesApi } from '../services/platformApi';
@@ -51,6 +52,25 @@ export function EnquiriesPage() {
   useEffect(() => {
     void loadEnquiries();
   }, []);
+
+  // Lock body scroll and handle Escape key when modal is open
+  useEffect(() => {
+    if (!selectedEnquiry) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedEnquiry(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedEnquiry]);
 
   const openManageModal = (item: Enquiry) => {
     setSelectedEnquiry(item);
@@ -294,7 +314,7 @@ export function EnquiriesPage() {
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ margin: 0 }}>
               <thead>
-                <tr style={{ background: 'rgba(11, 31, 51, 0.03)' }}>
+                <tr style={{ background: 'var(--sand)' }}>
                   <th style={{ paddingLeft: '1.25rem' }}>Candidate</th>
                   <th>Contact Info</th>
                   <th>Course Interest</th>
@@ -413,89 +433,90 @@ export function EnquiriesPage() {
       </div>
 
       {/* Lead Management Modal Drawer */}
-      {selectedEnquiry && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(6, 18, 32, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeManageModal();
-          }}
-        >
+      {selectedEnquiry &&
+        createPortal(
           <div
-            className="animate-rise"
             style={{
-              background: 'var(--paper)',
-              borderRadius: '16px',
-              maxWidth: '680px',
-              width: '100%',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 24px 64px rgba(11, 31, 51, 0.28)',
-              border: '1px solid var(--line)',
-              padding: '1.75rem',
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(6, 18, 32, 0.75)',
+              backdropFilter: 'blur(6px)',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '1.25rem',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 99999,
+              padding: '1rem',
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeManageModal();
             }}
           >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    fontWeight: 700,
-                    color: 'var(--azure)',
-                  }}
-                >
-                  Candidate Profile & Lead Conversion
-                </span>
-                <h2 style={{ margin: '0.2rem 0 0', fontSize: '1.5rem', color: 'var(--ink)' }}>
-                  {selectedEnquiry.fullName}
-                </h2>
-                <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '2px' }}>
-                  Submitted on {new Date(selectedEnquiry.createdAtUtc).toLocaleString()}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeManageModal}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: 'var(--muted)',
-                  lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Quick Contact & Details Grid */}
             <div
+              className="animate-rise"
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: '0.85rem',
-                background: 'rgba(11, 31, 51, 0.03)',
-                padding: '1rem',
-                borderRadius: '10px',
-                border: '1px solid var(--line)',
+                background: 'var(--card-bg)',
+                borderRadius: '16px',
+                maxWidth: '680px',
+                width: '100%',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                boxShadow: '0 24px 64px rgba(0, 0, 0, 0.45)',
+                border: '1px solid var(--card-border)',
+                padding: '1.75rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.25rem',
               }}
             >
+              {/* Modal Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      fontWeight: 700,
+                      color: 'var(--azure)',
+                    }}
+                  >
+                    Candidate Profile & Lead Conversion
+                  </span>
+                  <h2 style={{ margin: '0.2rem 0 0', fontSize: '1.5rem', color: 'var(--ink)' }}>
+                    {selectedEnquiry.fullName}
+                  </h2>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '2px' }}>
+                    Submitted on {new Date(selectedEnquiry.createdAtUtc).toLocaleString()}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeManageModal}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '1.5rem',
+                    cursor: 'pointer',
+                    color: 'var(--muted)',
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Quick Contact & Details Grid */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '0.85rem',
+                  background: 'var(--sand)',
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  border: '1px solid var(--card-border)',
+                }}
+              >
               <div>
                 <small style={{ color: 'var(--muted)', display: 'block', fontSize: '0.78rem' }}>Course Interested</small>
                 <strong style={{ fontSize: '0.92rem', color: 'var(--ink)' }}>{selectedEnquiry.interestedCourse}</strong>
@@ -525,7 +546,7 @@ export function EnquiriesPage() {
               </label>
               <div
                 style={{
-                  background: '#f8fafc',
+                  background: 'var(--sand)',
                   border: '1px solid var(--line)',
                   borderLeft: '4px solid var(--azure)',
                   padding: '0.9rem 1.1rem',
@@ -592,7 +613,8 @@ export function EnquiriesPage() {
                   padding: '0.75rem',
                   borderRadius: '8px',
                   border: '1px solid var(--line)',
-                  background: '#ffffff',
+                  background: 'var(--input-bg)',
+                  color: 'var(--ink)',
                   fontSize: '0.92rem',
                   lineHeight: 1.5,
                 }}
@@ -669,7 +691,8 @@ export function EnquiriesPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

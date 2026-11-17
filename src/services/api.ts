@@ -29,11 +29,20 @@ export async function apiRequest<T>(
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? controller.signal,
+    });
   } catch {
     throw new ApiError('Unable to reach the API. Is the backend running?', 0);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;

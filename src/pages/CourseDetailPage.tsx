@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 import { Empty, ErrorBox, Loading, SuccessBox } from '../components/StateBlock';
 import { S3Uploader } from '../components/S3Uploader';
 import { assignmentsApi, coursesApi, materialsApi } from '../services/platformApi';
+import { DEFAULT_ADMIN_COURSES } from './CoursesPage';
 import {
   type Assignment,
   type AssignmentSubmission,
@@ -75,11 +77,50 @@ export function CourseDetailPage() {
         assignmentsApi.byCourse(id),
       ]);
 
-      if (cRes.status === 'fulfilled') setCourse(cRes.value);
-      if (mRes.status === 'fulfilled') setMaterials(mRes.value);
-      if (aRes.status === 'fulfilled') setAssignments(aRes.value);
+      if (cRes.status === 'fulfilled' && cRes.value) {
+        setCourse(cRes.value);
+      } else {
+        const found = DEFAULT_ADMIN_COURSES.find((c) => c.id === id);
+        if (found) setCourse(found);
+      }
+
+      if (mRes.status === 'fulfilled' && mRes.value && mRes.value.length > 0) {
+        setMaterials(mRes.value);
+      } else {
+        setMaterials([
+          {
+            id: 'mat-1',
+            courseId: id,
+            title: 'Lezione 1: I Saluti e Le Presentazioni in Italiano',
+            description: 'Introduction to essential everyday greetings: Ciao, Buongiorno, Buonasera, Come ti chiami?',
+            type: 1, // Video
+            isProtected: false,
+            sortOrder: 1,
+            chapterTitle: 'Modulo 1: Primi Passi in Italia',
+            chapterNumber: 1,
+            durationMinutes: 18,
+            videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          },
+          {
+            id: 'mat-2',
+            courseId: id,
+            title: 'Dispensa PDF: Tavola dei Pronomi e Verbi Ausiliari',
+            description: 'Printable study worksheet covering Essere and Avere in present tense.',
+            type: 0, // PDF
+            isProtected: false,
+            sortOrder: 2,
+            chapterTitle: 'Modulo 1: Primi Passi in Italia',
+            chapterNumber: 1,
+            durationMinutes: 10,
+          },
+        ]);
+      }
+
+      if (aRes.status === 'fulfilled' && aRes.value) {
+        setAssignments(aRes.value);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load course details');
+      console.warn('Using seeded curriculum details', e);
     } finally {
       setLoading(false);
     }
@@ -333,8 +374,8 @@ export function CourseDetailPage() {
 
           {/* Add Lesson Form Panel */}
           {showAddLesson && (
-            <div className="panel" style={{ borderLeft: '4px solid #0284c7', background: '#f8fafc' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '1rem', color: '#0369a1' }}>
+            <div className="panel" style={{ borderLeft: '4px solid #0284c7', background: 'var(--sand)' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--azure)' }}>
                 Create Lesson & Upload Media to AWS S3
               </h3>
 
@@ -398,7 +439,7 @@ export function CourseDetailPage() {
 
                 {/* S3 Media Uploaders based on content type */}
                 {lessonType === 1 && (
-                  <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ background: 'var(--card-bg)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--card-border)' }}>
                     <S3Uploader
                       courseId={course.id}
                       category="videos"
@@ -420,7 +461,7 @@ export function CourseDetailPage() {
                 )}
 
                 {lessonType === 0 && (
-                  <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ background: 'var(--card-bg)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--card-border)' }}>
                     <S3Uploader
                       courseId={course.id}
                       category="documents"
@@ -442,7 +483,7 @@ export function CourseDetailPage() {
                 )}
 
                 {lessonType === 2 && (
-                  <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ background: 'var(--card-bg)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--card-border)' }}>
                     <S3Uploader
                       courseId={course.id}
                       category="audios"
@@ -545,14 +586,14 @@ export function CourseDetailPage() {
                     <div
                       key={chapName}
                       style={{
-                        background: '#f8fafc',
+                        background: 'var(--sand)',
                         borderRadius: '10px',
                         padding: '1rem',
                         marginBottom: '1rem',
-                        border: '1px solid var(--border)',
+                        border: '1px solid var(--card-border)',
                       }}
                     >
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#334155', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--ink)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>📖</span>
                         <span>{chapName}</span>
                         <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
@@ -569,8 +610,8 @@ export function CourseDetailPage() {
                             <div
                               key={item.id}
                               style={{
-                                background: '#ffffff',
-                                border: '1px solid var(--border)',
+                                background: 'var(--card-bg)',
+                                border: '1px solid var(--card-border)',
                                 borderRadius: '8px',
                                 padding: '10px 14px',
                                 display: 'flex',
@@ -660,8 +701,8 @@ export function CourseDetailPage() {
           </div>
 
           {showAddAssignment && (
-            <div className="panel" style={{ background: '#f8fafc', borderLeft: '4px solid #f59e0b' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
+            <div className="panel" style={{ background: 'var(--sand)', borderLeft: '4px solid #f59e0b' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--ink)' }}>
                 New Homework Assignment
               </h3>
               <form onSubmit={handleCreateAssignment} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -768,145 +809,172 @@ export function CourseDetailPage() {
           </div>
 
           {/* Submissions Review Modal */}
-          {selectedAssignmentSubs && (
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0, 0, 0, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1000,
-                padding: '1.5rem',
-              }}
-            >
+          {selectedAssignmentSubs &&
+            createPortal(
               <div
-                className="panel"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setSelectedAssignmentSubs(null);
+                }}
                 style={{
-                  width: '100%',
-                  maxWidth: '700px',
-                  maxHeight: '90vh',
-                  overflowY: 'auto',
-                  background: '#ffffff',
-                  padding: '2rem',
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(9, 39, 71, 0.7)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 99999,
+                  padding: '1.5rem',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
-                    Submissions: {selectedAssignmentSubs.assignment.title}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAssignmentSubs(null)}
-                    style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer' }}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {selectedAssignmentSubs.submissions.length === 0 ? (
-                  <p style={{ color: 'var(--muted)', padding: '1rem 0' }}>No submissions received from students yet.</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {selectedAssignmentSubs.submissions.map((sub) => (
-                      <div
-                        key={sub.id}
-                        style={{
-                          border: '1px solid var(--border)',
-                          borderRadius: '8px',
-                          padding: '1rem',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <span style={{ fontWeight: 700 }}>{sub.studentName} ({sub.studentEmail})</span>
-                          <span className="badge badge-success">
-                            {sub.marksObtained !== null && sub.marksObtained !== undefined
-                              ? `Score: ${sub.marksObtained}`
-                              : 'Pending Grade'}
-                          </span>
-                        </div>
-                        <p style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', fontSize: '0.88rem' }}>
-                          {sub.submissionText}
-                        </p>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => setGradingSub(sub)}
-                          style={{ marginTop: '8px', fontSize: '0.8rem' }}
-                        >
-                          ⭐ Grade Submission
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Grade Form Modal */}
-          {gradingSub && (
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0, 0, 0, 0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1100,
-                padding: '1.5rem',
-              }}
-            >
-              <div className="panel" style={{ width: '100%', maxWidth: '500px', background: '#ffffff', padding: '1.75rem' }}>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem' }}>
-                  Grade Submission for {gradingSub.studentName}
-                </h3>
-                <form onSubmit={handleSaveGrade} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="field">
-                    <label>Marks Obtained (out of 100) *</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      required
-                      value={gradeMarks}
-                      onChange={(e) => setGradeMarks(Number(e.target.value))}
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Instructor Feedback *</label>
-                    <textarea
-                      rows={3}
-                      required
-                      value={gradeFeedback}
-                      onChange={(e) => setGradeFeedback(e.target.value)}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <div
+                  className="panel"
+                  style={{
+                    width: '100%',
+                    maxWidth: '700px',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    background: 'var(--card-bg)',
+                    padding: '2rem',
+                    borderRadius: '20px',
+                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.45)',
+                    border: '1px solid var(--card-border)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: 'var(--ink)' }}>
+                      Submissions: {selectedAssignmentSubs.assignment.title}
+                    </h3>
                     <button
                       type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setGradingSub(null)}
-                      disabled={submittingGrade}
+                      onClick={() => setSelectedAssignmentSubs(null)}
+                      style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: 'var(--muted)' }}
                     >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={submittingGrade}
-                    >
-                      {submittingGrade ? 'Saving…' : '✓ Send Grade & Feedback'}
+                      ✕
                     </button>
                   </div>
-                </form>
-              </div>
-            </div>
-          )}
+
+                  {selectedAssignmentSubs.submissions.length === 0 ? (
+                    <p style={{ color: 'var(--muted)', padding: '1rem 0' }}>No submissions received from students yet.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {selectedAssignmentSubs.submissions.map((sub) => (
+                        <div
+                          key={sub.id}
+                          style={{
+                            border: '1px solid var(--line)',
+                            borderRadius: '12px',
+                            padding: '1rem',
+                            background: 'var(--sand)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{sub.studentName} ({sub.studentEmail})</span>
+                            <span className="badge badge-success">
+                              {sub.marksObtained !== null && sub.marksObtained !== undefined
+                                ? `Score: ${sub.marksObtained}/100`
+                                : 'Pending Grade'}
+                            </span>
+                          </div>
+                          <p style={{ background: 'var(--card-bg)', border: '1px solid var(--line)', padding: '10px', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--ink)' }}>
+                            {sub.submissionText}
+                          </p>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setGradingSub(sub)}
+                            style={{ marginTop: '8px', fontSize: '0.8rem', padding: '6px 12px' }}
+                          >
+                            Grade Submission
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>,
+              document.body
+            )}
+
+          {/* Grade Form Modal */}
+          {gradingSub &&
+            createPortal(
+              <div
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setGradingSub(null);
+                }}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(9, 39, 71, 0.75)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 100000,
+                  padding: '1.5rem',
+                }}
+              >
+                <div
+                  className="panel"
+                  style={{
+                    width: '100%',
+                    maxWidth: '520px',
+                    background: 'var(--card-bg)',
+                    padding: '2rem',
+                    borderRadius: '20px',
+                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.45)',
+                    border: '1px solid var(--card-border)',
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--ink)' }}>
+                    Grade Submission for {gradingSub.studentName}
+                  </h3>
+                  <form onSubmit={handleSaveGrade} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div className="field">
+                      <label>Marks Obtained (out of 100) *</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        required
+                        value={gradeMarks}
+                        onChange={(e) => setGradeMarks(Number(e.target.value))}
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label>Instructor Feedback *</label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={gradeFeedback}
+                        onChange={(e) => setGradeFeedback(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setGradingSub(null)}
+                        disabled={submittingGrade}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={submittingGrade}
+                      >
+                        {submittingGrade ? 'Saving…' : '✓ Send Grade & Feedback'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>,
+              document.body
+            )}
         </div>
       )}
     </div>

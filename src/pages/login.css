@@ -61,6 +61,12 @@
   backdrop-filter: blur(16px);
 }
 
+[data-theme="dark"] .login-panel {
+  background: rgba(17, 28, 46, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6);
+}
+
 .login-panel h1 {
   font-size: 1.85rem;
   margin-bottom: 0.35rem;
