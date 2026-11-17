@@ -7,90 +7,15 @@ import {
   auditApi,
   certificatesApi,
   notificationsApi,
-  paymentsApi,
-  subscriptionsApi,
-  supportApi,
   usersApi,
 } from '../services/platformApi';
 import {
-  enumLabel,
   type AuditLog,
   type Certificate,
   type NotificationItem,
-  type Payment,
-  type Subscription,
-  type SupportTicket,
   type User,
 } from '../types';
 
-const SUB_STATUS = ['Pending', 'Active', 'PastDue', 'Cancelled', 'Suspended'];
-const PAY_STATUS = ['Pending', 'Completed', 'Failed', 'Refunded'];
-const TICKET_STATUS = ['Open', 'InProgress', 'Resolved', 'Closed'];
-
-export function SubscriptionsPage() {
-  const [subs, setSubs] = useState<Subscription[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        setSubs(await subscriptionsApi.list());
-        setPayments(await paymentsApi.list());
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load subscriptions');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  if (loading) return <Loading />;
-  if (error) return <ErrorBox message={error} />;
-
-  return (
-    <div className="animate-rise">
-      <div className="page-header"><div><h1>Subscriptions & payments</h1><p>Mock PayPal lifecycle records served by the API.</p></div></div>
-      <div className="grid-2">
-        <section className="panel">
-          <h2>Subscriptions</h2>
-          {subs.length === 0 ? <Empty /> : (
-            <table className="table">
-              <thead><tr><th>Plan</th><th>Course</th><th>Status</th></tr></thead>
-              <tbody>
-                {subs.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.planName}{s.isMocked && <span className="badge badge-warn" style={{ marginLeft: 6 }}>mock</span>}</td>
-                    <td>{s.courseTitle}</td>
-                    <td>{enumLabel(s.status, SUB_STATUS)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-        <section className="panel">
-          <h2>Payments</h2>
-          {payments.length === 0 ? <Empty /> : (
-            <table className="table">
-              <thead><tr><th>Amount</th><th>Status</th><th>Reference</th></tr></thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.currency} {p.amount}</td>
-                    <td>{enumLabel(p.status, PAY_STATUS)}</td>
-                    <td>{p.payPalReference}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
 
 export function CertificatesPage() {
   const [items, setItems] = useState<Certificate[]>([]);
@@ -373,68 +298,6 @@ export function NotificationsPage() {
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-export function SupportPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    try {
-      setTickets(await supportApi.list());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load tickets');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { void load(); }, []);
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      await supportApi.create(subject, description);
-      setSubject('');
-      setDescription('');
-      setMessage('Support ticket submitted.');
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create ticket');
-    }
-  }
-
-  return (
-    <div className="animate-rise">
-      <div className="page-header"><div><h1>Helpdesk</h1><p>Open and track support tickets.</p></div></div>
-      {message && <SuccessBox message={message} />}
-      {error && <ErrorBox message={error} />}
-      <div className="grid-2">
-        <form className="panel" onSubmit={onSubmit}>
-          <h2>New ticket</h2>
-          <div className="field"><label>Subject</label><input value={subject} onChange={(e) => setSubject(e.target.value)} required /></div>
-          <div className="field"><label>Description</label><textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} required /></div>
-          <button className="btn btn-primary" type="submit">Submit</button>
-        </form>
-        <section className="panel">
-          <h2>Tickets</h2>
-          {loading ? <Loading /> : tickets.length === 0 ? <Empty /> : tickets.map((t) => (
-            <article key={t.id} style={{ marginBottom: '0.85rem' }}>
-              <strong>{t.subject}</strong>
-              <div><span className="badge">{enumLabel(t.status, TICKET_STATUS)}</span></div>
-              <div style={{ color: 'var(--muted)' }}>{t.description}</div>
-            </article>
-          ))}
-        </section>
       </div>
     </div>
   );
@@ -767,7 +630,7 @@ export function AdminPage() {
       <div className="page-header">
         <div>
           <h1>Admin console</h1>
-          <p>Operational shortcuts for courses, users, payments, and audit oversight.</p>
+          <p>Operational shortcuts for courses, users, enquiries, and audit oversight.</p>
         </div>
       </div>
       <div className="grid-3">
@@ -775,8 +638,6 @@ export function AdminPage() {
         <Link className="panel" to="/app/courses"><h2>Courses</h2><p>Publish and manage catalogue capacity.</p></Link>
         <Link className="panel" to="/app/users"><h2>Users</h2><p>Review roles and account status.</p></Link>
         <Link className="panel" to="/app/audit"><h2>Security audit</h2><p>Inspect authentication and admin events.</p></Link>
-        <Link className="panel" to="/app/subscriptions"><h2>Payments</h2><p>Mock PayPal subscription ledger.</p></Link>
-        <Link className="panel" to="/app/support"><h2>Helpdesk</h2><p>Track open support tickets.</p></Link>
         <Link className="panel" to="/app/notifications"><h2>Comms</h2><p>Platform notifications feed.</p></Link>
       </div>
     </div>

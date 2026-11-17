@@ -14,8 +14,6 @@ import {
   AuditPage,
   CertificatesPage,
   NotificationsPage,
-  SubscriptionsPage,
-  SupportPage,
   UsersPage,
 } from '../pages/MiscPages';
 import { ProgressPage } from '../pages/ProgressPage';
@@ -87,22 +85,6 @@ export function AppRouter() {
           element={
             <RoleGate roles={['Mentor', 'Staff', 'Admin', 'SuperAdmin']}>
               <NotificationsPage />
-            </RoleGate>
-          }
-        />
-        <Route
-          path="support"
-          element={
-            <RoleGate roles={['Staff', 'Admin', 'SuperAdmin']}>
-              <SupportPage />
-            </RoleGate>
-          }
-        />
-        <Route
-          path="subscriptions"
-          element={
-            <RoleGate roles={['Admin', 'SuperAdmin']}>
-              <SubscriptionsPage />
             </RoleGate>
           }
         />

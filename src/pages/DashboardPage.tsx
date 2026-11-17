@@ -134,9 +134,6 @@ export function DashboardPage() {
             { label: 'Total Users', val: admin.totalUsers, color: '#0284C7', bg: '#EFF6FF', icon: '👥' },
             { label: 'Active Courses', val: admin.totalCourses, color: '#16A34A', bg: '#F0FDF4', icon: '📚' },
             { label: 'Active Enrollments', val: admin.activeEnrollments, color: '#8B5CF6', bg: '#F5F3FF', icon: '🎓' },
-            { label: 'Open Helpdesk Tickets', val: admin.openTickets, color: '#D97706', bg: '#FFFBEB', icon: '🎫' },
-            { label: 'Gross Revenue (EUR)', val: `€${admin.totalRevenue}`, color: '#0D5C75', bg: '#F0FDFA', icon: '💶' },
-            { label: 'Subscriptions', val: admin.activeSubscriptions, color: '#EC4899', bg: '#FDF2F8', icon: '⭐' },
           ].map((m) => (
             <div
               key={m.label}
@@ -182,7 +179,6 @@ export function DashboardPage() {
             { label: 'New Leads', val: staff.newEnquiries, color: '#16A34A', bg: '#F0FDF4', icon: '✨' },
             { label: 'In Follow-Up', val: staff.inFollowUpEnquiries, color: '#D97706', bg: '#FFFBEB', icon: '⏳' },
             { label: 'Enrolled Leads', val: staff.enrolledEnquiries, color: '#059669', bg: '#ECFDF5', icon: '🎉' },
-            { label: 'Open Tickets', val: staff.openTickets, color: '#8B5CF6', bg: '#F5F3FF', icon: '🎫' },
             { label: 'Unread Alerts', val: staff.unreadNotifications, color: '#EC4899', bg: '#FDF2F8', icon: '🔔' },
           ].map((m) => (
             <div

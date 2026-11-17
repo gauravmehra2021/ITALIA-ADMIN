@@ -146,7 +146,7 @@ export function LandingPage() {
             <div className="role-lane" style={{ ['--delay' as string]: '0ms' }}>Student · courses · progress · AI</div>
             <div className="role-lane" style={{ ['--delay' as string]: '80ms' }}>Mentor · classes · attendance · materials</div>
             <div className="role-lane" style={{ ['--delay' as string]: '160ms' }}>Staff · admissions · enquiries · lead conversion</div>
-            <div className="role-lane" style={{ ['--delay' as string]: '240ms' }}>Admin · catalogue · payments · support</div>
+            <div className="role-lane" style={{ ['--delay' as string]: '240ms' }}>Admin · catalogue · enquiries · audit</div>
             <div className="role-lane" style={{ ['--delay' as string]: '320ms' }}>Super Admin · security · audit · platform</div>
           </div>
         </div>

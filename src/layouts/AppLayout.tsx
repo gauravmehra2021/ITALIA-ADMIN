@@ -66,25 +66,12 @@ const NavIcons = {
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   ),
-  Support: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  ),
   Users: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-  Payments: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
     </svg>
   ),
   Audit: () => (
@@ -263,19 +250,6 @@ export function AppLayout() {
             <span>Notifications Dispatcher</span>
           </NavLink>
 
-          {/* Support Helpdesk: Staff and Administrators */}
-          {(hasRole('Staff') || hasRole('Admin') || hasRole('SuperAdmin')) && (
-            <NavLink
-              to="/app/support"
-              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-              data-tooltip="Support Helpdesk"
-              title={collapsed ? "Support Helpdesk" : undefined}
-            >
-              <span className="nav-icon"><NavIcons.Support /></span>
-              <span>Support Helpdesk</span>
-            </NavLink>
-          )}
-
           {/* Operational Management */}
           {(hasRole('Admin') || hasRole('SuperAdmin')) && (
             <>
@@ -287,15 +261,6 @@ export function AppLayout() {
               >
                 <span className="nav-icon"><NavIcons.Users /></span>
                 <span>Users & Roles</span>
-              </NavLink>
-              <NavLink
-                to="/app/subscriptions"
-                className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-                data-tooltip="Payments Ledger"
-                title={collapsed ? "Payments Ledger" : undefined}
-              >
-                <span className="nav-icon"><NavIcons.Payments /></span>
-                <span>Payments Ledger</span>
               </NavLink>
             </>
           )}

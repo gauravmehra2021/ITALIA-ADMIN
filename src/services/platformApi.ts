@@ -21,12 +21,9 @@ import type {
   MentorDashboard,
   NotificationItem,
   PagedResult,
-  Payment,
   PresignedUploadResponse,
   Progress,
   StaffDashboard,
-  Subscription,
-  SupportTicket,
   TestAttempt,
   UpdateEnquiryStatusRequest,
   User,
@@ -143,16 +140,6 @@ export const progressApi = {
     api.post('/api/progress/attendance', { classSessionId, userId, present }),
 };
 
-export const subscriptionsApi = {
-  list: () => api.get<Subscription[]>('/api/subscriptions'),
-  create: (courseId: string, planName: string) =>
-    api.post<Subscription>('/api/subscriptions', { courseId, planName }),
-};
-
-export const paymentsApi = {
-  list: () => api.get<Payment[]>('/api/payments'),
-};
-
 export const certificatesApi = {
   list: () => api.get<Certificate[]>('/api/certificates'),
   verify: (code: string) => api.get<Certificate>(`/api/certificates/verify/${encodeURIComponent(code)}`),
@@ -178,12 +165,6 @@ export const notificationsApi = {
 
 export const announcementsApi = {
   list: () => api.get<Announcement[]>('/api/announcements'),
-};
-
-export const supportApi = {
-  list: () => api.get<SupportTicket[]>('/api/support'),
-  create: (subject: string, description: string) =>
-    api.post<SupportTicket>('/api/support', { subject, description }),
 };
 
 export const dashboardApi = {
