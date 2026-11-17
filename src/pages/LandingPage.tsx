@@ -202,7 +202,7 @@ export function LandingPage() {
               <h4>Admissions Desk</h4>
               <div className="contact-direct-item">
                 <span>📧</span>
-                <span>Email: <strong>admissions@sseuropa.demo</strong></span>
+                <span>Email: <strong>Info@sseuropa.com</strong></span>
               </div>
               <div className="contact-direct-item">
                 <span>💬</span>

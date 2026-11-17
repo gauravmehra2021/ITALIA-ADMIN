@@ -18,11 +18,12 @@ import {
 } from '../pages/MiscPages';
 import { ProgressPage } from '../pages/ProgressPage';
 import type { ReactNode } from 'react';
-import type { UserRole } from '../types';
+import { PANEL_ROLES, type UserRole } from '../types';
 
+/** Signed in AND one of the four panel roles. Students never get into the admin panel. */
 function Protected({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
+  const { token, user } = useAuth();
+  if (!token || !user || !PANEL_ROLES.includes(user.role)) return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -83,7 +84,7 @@ export function AppRouter() {
         <Route
           path="notifications"
           element={
-            <RoleGate roles={['Mentor', 'Staff', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
               <NotificationsPage />
             </RoleGate>
           }
@@ -99,7 +100,7 @@ export function AppRouter() {
         <Route
           path="users"
           element={
-            <RoleGate roles={['Admin', 'SuperAdmin']}>
+            <RoleGate roles={['SuperAdmin']}>
               <UsersPage />
             </RoleGate>
           }

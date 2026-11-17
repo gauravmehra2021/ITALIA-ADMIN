@@ -6,6 +6,15 @@ import { useAuth } from '../hooks/useAuth';
 import { authApi } from '../services/platformApi';
 import './login.css';
 
+// Seeded demo accounts that exist only in the local in-memory database.
+const DEV_DEMO_PASSWORD = 'Demo@12345';
+const DEV_DEMO_ACCOUNTS = [
+  { label: '👑 Super Admin', email: 'superadmin@sseuropa.demo' },
+  { label: '🛡️ Admin', email: 'admin@sseuropa.demo' },
+  { label: '🗂️ Staff', email: 'staff@sseuropa.demo' },
+  { label: '👩‍🏫 Teacher', email: 'mentor@sseuropa.demo' },
+];
+
 export function LoginPage() {
   const { loginWithPassword, verifyOtp, loading } = useAuth();
   const navigate = useNavigate();
@@ -110,64 +119,38 @@ export function LoginPage() {
             Teacher, Staff & Administrator Management Portal
           </p>
 
-          <div style={{ background: 'rgba(13, 92, 117, 0.1)', border: '1px solid rgba(13, 92, 117, 0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text)' }}>
-            🛡️ <strong>Admin Portal:</strong> Use the quick buttons below or enter your admin credentials.
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-              onClick={async () => {
-                setEmail('superadmin@sseuropa.demo');
-                setPassword('Demo@12345');
-                try {
-                  const res = await loginWithPassword('superadmin@sseuropa.demo', 'Demo@12345');
-                  if (!res.requiresOtp) navigate('/app');
-                } catch {
-                  // Fallback navigates
-                  navigate('/app');
-                }
-              }}
-            >
-              👑 SuperAdmin
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-              onClick={async () => {
-                setEmail('admin@sseuropa.demo');
-                setPassword('Demo@12345');
-                try {
-                  const res = await loginWithPassword('admin@sseuropa.demo', 'Demo@12345');
-                  if (!res.requiresOtp) navigate('/app');
-                } catch {
-                  navigate('/app');
-                }
-              }}
-            >
-              🛡️ Admin (Demo)
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
-              onClick={async () => {
-                setEmail('admin@sseuropa.com');
-                setPassword('Admin@SSEuropa2026!');
-                try {
-                  const res = await loginWithPassword('admin@sseuropa.com', 'Admin@SSEuropa2026!');
-                  if (!res.requiresOtp) navigate('/app');
-                } catch {
-                  navigate('/app');
-                }
-              }}
-            >
-              🏢 Root Admin
-            </button>
-          </div>
+          {/* Local development only: one-click sign-in as each seeded demo role.
+              Stripped from production builds, so no credentials ship to the live site. */}
+          {import.meta.env.DEV && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '6px' }}>
+                Local dev: sign in as a demo role
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {DEV_DEMO_ACCOUNTS.map((d) => (
+                  <button
+                    key={d.email}
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.8rem', padding: '6px 12px', flex: '1 1 auto' }}
+                    onClick={async () => {
+                      setEmail(d.email);
+                      setPassword(DEV_DEMO_PASSWORD);
+                      setError(null);
+                      try {
+                        const res = await loginWithPassword(d.email, DEV_DEMO_PASSWORD);
+                        if (!res.requiresOtp) navigate('/app');
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Demo sign-in failed.');
+                      }
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <ErrorBox message={error} />}
           {info && <SuccessBox message={info} />}
@@ -188,7 +171,7 @@ export function LoginPage() {
                     onChange={(e) => setForgotEmail(e.target.value)}
                     required
                     type="email"
-                    placeholder="you@sseuropa.demo"
+                    placeholder="you@sseuropa.com"
                   />
                 </div>
                 <button className="btn btn-primary" type="submit" disabled={resetSubmitting} style={{ width: '100%', marginBottom: '8px' }}>

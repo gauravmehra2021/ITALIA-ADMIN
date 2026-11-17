@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
+import { roleLabel } from '../types';
 import './layout.css';
 
 const NavIcons = {
@@ -239,30 +240,30 @@ export function AppLayout() {
             </>
           )}
 
-          {/* Platform Communication */}
-          <NavLink
-            to="/app/notifications"
-            className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-            data-tooltip="Notifications Dispatcher"
-            title={collapsed ? "Notifications Dispatcher" : undefined}
-          >
-            <span className="nav-icon"><NavIcons.Notifications /></span>
-            <span>Notifications Dispatcher</span>
-          </NavLink>
+          {/* Platform Communication: Teachers and Administrators */}
+          {(hasRole('Mentor') || hasRole('Admin') || hasRole('SuperAdmin')) && (
+            <NavLink
+              to="/app/notifications"
+              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
+              data-tooltip="Notifications"
+              title={collapsed ? "Notifications" : undefined}
+            >
+              <span className="nav-icon"><NavIcons.Notifications /></span>
+              <span>Notifications</span>
+            </NavLink>
+          )}
 
-          {/* Operational Management */}
-          {(hasRole('Admin') || hasRole('SuperAdmin')) && (
-            <>
-              <NavLink
-                to="/app/users"
-                className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
-                data-tooltip="Users & Roles"
-                title={collapsed ? "Users & Roles" : undefined}
-              >
-                <span className="nav-icon"><NavIcons.Users /></span>
-                <span>Users & Roles</span>
-              </NavLink>
-            </>
+          {/* Team Management: Super Admin only (creates Admin, Staff and Teacher accounts) */}
+          {hasRole('SuperAdmin') && (
+            <NavLink
+              to="/app/users"
+              className={({ isActive }) => `side-nav-link ${isActive ? 'active' : ''}`}
+              data-tooltip="Users & Roles"
+              title={collapsed ? "Users & Roles" : undefined}
+            >
+              <span className="nav-icon"><NavIcons.Users /></span>
+              <span>Users & Roles</span>
+            </NavLink>
           )}
 
           {/* Governance & Audit: Super Admin Only */}
@@ -333,8 +334,8 @@ export function AppLayout() {
           {/* User Profile Card */}
           <div
             className={`user-profile-card ${collapsed ? 'is-collapsed' : ''}`}
-            data-tooltip={`${user?.fullName || 'SS Europa Admin'} (${user?.role || 'Staff'})`}
-            title={collapsed ? `${user?.fullName || 'SS Europa Admin'} (${user?.role || 'Staff'})` : undefined}
+            data-tooltip={`${user?.fullName || 'SS Europa'} (${roleLabel(user?.role)})`}
+            title={collapsed ? `${user?.fullName || 'SS Europa'} (${roleLabel(user?.role)})` : undefined}
           >
             <div className="user-avatar-circle">
               {getInitials(user?.fullName)}
@@ -342,13 +343,7 @@ export function AppLayout() {
             {!collapsed && (
               <div className="user-meta">
                 <strong className="user-name">{user?.fullName || 'SS Europa Admin'}</strong>
-                <span className="user-role-badge">
-                  {user?.role === 'Staff' && 'Admissions Staff'}
-                  {user?.role === 'Mentor' && 'Course Mentor'}
-                  {user?.role === 'Admin' && 'Administrator'}
-                  {user?.role === 'SuperAdmin' && 'Super Admin'}
-                  {(!user?.role || user?.role === 'User') && 'Staff Member'}
-                </span>
+                <span className="user-role-badge">{roleLabel(user?.role)}</span>
               </div>
             )}
           </div>

@@ -24,6 +24,8 @@ import type {
   PresignedUploadResponse,
   Progress,
   StaffDashboard,
+  SuperAdminDashboard,
+  TeamRole,
   TestAttempt,
   UpdateEnquiryStatusRequest,
   User,
@@ -170,6 +172,7 @@ export const announcementsApi = {
 export const dashboardApi = {
   student: () => api.get<DashboardStats>('/api/dashboard/student'),
   admin: () => api.get<AdminDashboard>('/api/dashboard/admin'),
+  superAdmin: () => api.get<SuperAdminDashboard>('/api/dashboard/superadmin'),
   mentor: () => api.get<MentorDashboard>('/api/dashboard/mentor'),
   staff: () => api.get<StaffDashboard>('/api/dashboard/staff'),
 };
@@ -205,14 +208,15 @@ export const usersApi = {
   list: () => api.get<User[]>('/api/users'),
   updateStatus: (id: string, isActive: boolean) =>
     api.put<User>(`/api/users/${id}/status`, { isActive }),
-  updateRole: (id: string, role: number | string) =>
-    api.put<User>(`/api/users/${id}/role`, { role: Number(role) }),
+  /** Role names are sent as text (the backend uses string enums): 'Admin' | 'Staff' | 'Mentor'. */
+  updateRole: (id: string, role: TeamRole) =>
+    api.put<User>(`/api/users/${id}/role`, { role }),
   create: (data: {
     email: string;
     password?: string;
     firstName: string;
     lastName: string;
-    role: string | number;
+    role: TeamRole;
     phoneNumber?: string;
   }) => api.post<User>('/api/users', data),
   softDelete: (id: string) => api.delete(`/api/users/${id}`),

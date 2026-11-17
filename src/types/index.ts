@@ -301,20 +301,35 @@ export interface DashboardStats {
   unreadNotifications: number;
 }
 
+/** Operations overview for Admins (also embedded in the Super Admin dashboard). */
 export interface AdminDashboard {
-  totalUsers: number;
+  totalStudents: number;
   totalCourses: number;
+  publishedCourses: number;
   activeEnrollments: number;
-  openTickets: number;
-  totalRevenue: number;
-  activeSubscriptions: number;
+  upcomingClasses: number;
+  newEnquiries: number;
+  inFollowUpEnquiries: number;
+  enrolledEnquiries: number;
 }
 
+export interface SuperAdminDashboard {
+  admins: number;
+  staff: number;
+  teachers: number;
+  students: number;
+  suspendedTeamAccounts: number;
+  operations: AdminDashboard;
+}
+
+/** Teacher dashboard (internal role name: Mentor). */
 export interface MentorDashboard {
   assignedClasses: number;
   assignedStudents: number;
   materials: number;
   pendingAttendance: number;
+  upcomingClasses: number;
+  coursesTaught: number;
 }
 
 export interface StaffDashboard {
@@ -322,9 +337,30 @@ export interface StaffDashboard {
   newEnquiries: number;
   inFollowUpEnquiries: number;
   enrolledEnquiries: number;
-  openTickets: number;
+  closedEnquiries: number;
   unreadNotifications: number;
 }
+
+/**
+ * The admin panel has exactly four roles. "Mentor" is the internal/database name
+ * for Teacher (kept so existing accounts keep working); always show ROLE_LABELS in the UI.
+ */
+export const PANEL_ROLES: UserRole[] = ['SuperAdmin', 'Admin', 'Staff', 'Mentor'];
+
+/** Roles the Super Admin can give to team members. Super Admin itself is never assignable. */
+export const TEAM_ROLES = ['Admin', 'Staff', 'Mentor'] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  SuperAdmin: 'Super Admin',
+  Admin: 'Admin',
+  Staff: 'Staff',
+  Mentor: 'Teacher',
+  User: 'Student',
+};
+
+export const roleLabel = (role: UserRole | string | undefined | null) =>
+  (role && ROLE_LABELS[role as UserRole]) || 'Team member';
 
 export interface AuditLog {
   id: string;

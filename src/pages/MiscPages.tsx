@@ -10,9 +10,12 @@ import {
   usersApi,
 } from '../services/platformApi';
 import {
+  roleLabel,
+  TEAM_ROLES,
   type AuditLog,
   type Certificate,
   type NotificationItem,
+  type TeamRole,
   type User,
 } from '../types';
 
@@ -303,17 +306,32 @@ export function NotificationsPage() {
   );
 }
 
+const ROLE_HELP: Record<TeamRole, string> = {
+  Admin: 'Full access to courses, live classes, notifications and admissions. Cannot manage team accounts.',
+  Staff: 'Admissions & Leads only: handles website contact-form enquiries and updates their status.',
+  Mentor: 'Teacher: courses & content, live classes and notifications.',
+};
+
+const isTeamRole = (role: string): role is TeamRole => (TEAM_ROLES as readonly string[]).includes(role);
+
+/**
+ * Users & Roles — Super Admin only.
+ * The Super Admin creates Admin, Staff and Teacher accounts, changes their role,
+ * and suspends or removes them. The Super Admin account itself is locked.
+ */
 export function UsersPage() {
+  const { user: me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [roleFilter, setRoleFilter] = useState<'All' | TeamRole>('All');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteLastName, setInviteLastName] = useState('');
-  const [inviteRole, setInviteRole] = useState<'1' | '2' | '3'>('1'); // 1 = Mentor, 2 = Staff, 3 = Admin
-  const [invitePassword, setInvitePassword] = useState('SSEuropa@2026');
+  const [inviteRole, setInviteRole] = useState<TeamRole>('Mentor');
+  const [invitePassword, setInvitePassword] = useState('');
   const [submittingInvite, setSubmittingInvite] = useState(false);
 
   async function load() {
@@ -330,6 +348,27 @@ export function UsersPage() {
     void load();
   }, []);
 
+  // The panel only shows the team: the Super Admin plus Admin, Staff and Teacher accounts.
+  const team = users.filter((u) => u.role === 'SuperAdmin' || isTeamRole(u.role));
+  const visible = team
+    .filter((u) => roleFilter === 'All' || u.role === roleFilter)
+    .sort((a, b) => (a.role === 'SuperAdmin' ? -1 : b.role === 'SuperAdmin' ? 1 : a.fullName.localeCompare(b.fullName)));
+  const countOf = (r: TeamRole) => team.filter((u) => u.role === r && !u.isDeleted).length;
+
+  const isLocked = (u: User) => u.role === 'SuperAdmin' || u.isProtectedSuperAdmin || u.id === me?.id;
+
+  async function run(action: () => Promise<unknown>, success: string) {
+    setError(null);
+    setMessage(null);
+    try {
+      await action();
+      setMessage(success);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    }
+  }
+
   async function handleInviteUser(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -340,135 +379,104 @@ export function UsersPage() {
         email: inviteEmail.trim(),
         firstName: inviteFirstName.trim(),
         lastName: inviteLastName.trim(),
-        role: Number(inviteRole),
+        role: inviteRole,
         password: invitePassword,
       });
-      setMessage(`New account created for ${inviteFirstName} ${inviteLastName}! Onboarding invitation email dispatched.`);
+      setMessage(`${roleLabel(inviteRole)} account created for ${inviteFirstName} ${inviteLastName}. An invitation email has been sent.`);
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteFirstName('');
       setInviteLastName('');
+      setInvitePassword('');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user account');
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setSubmittingInvite(false);
     }
   }
 
-  async function toggleStatus(u: User) {
-    setError(null);
-    setMessage(null);
-    const newActive = u.status !== 'Active';
-    try {
-      await usersApi.updateStatus(u.id, newActive);
-      setMessage(`User ${u.fullName} is now ${newActive ? 'Active' : 'Suspended'}.`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update user status');
-    }
-  }
+  const toggleStatus = (u: User) => {
+    const activate = u.status !== 'Active';
+    return run(() => usersApi.updateStatus(u.id, activate), `${u.fullName} is now ${activate ? 'active' : 'suspended'}.`);
+  };
 
-  async function handleSoftDelete(u: User) {
-    if (u.isProtectedSuperAdmin) {
-      alert('This is a protected permanent Super Administrator account and cannot be deleted.');
-      return;
-    }
-    if (!confirm(`Are you sure you want to deactivate and soft-delete user '${u.fullName}'? They will no longer be able to log in.`)) return;
+  const changeRole = (u: User, role: TeamRole) =>
+    run(() => usersApi.updateRole(u.id, role), `${u.fullName} is now ${roleLabel(role)}.`);
 
-    setError(null);
-    setMessage(null);
-    try {
-      await usersApi.softDelete(u.id);
-      setMessage(`User ${u.fullName} has been deactivated (soft deleted).`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to soft delete user');
-    }
-  }
+  const handleRemove = (u: User) => {
+    if (!confirm(`Remove ${u.fullName}? They will no longer be able to log in. You can restore them later.`)) return;
+    return run(() => usersApi.softDelete(u.id), `${u.fullName} has been removed.`);
+  };
 
-  async function handleRestore(u: User) {
-    setError(null);
-    setMessage(null);
-    try {
-      await usersApi.restore(u.id);
-      setMessage(`User ${u.fullName} has been restored to active status.`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to restore user');
-    }
-  }
-
-  async function changeRole(u: User, newRole: string) {
-    setError(null);
-    setMessage(null);
-    try {
-      await usersApi.updateRole(u.id, newRole);
-      setMessage(`Role for ${u.fullName} updated.`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update user role');
-    }
-  }
+  const handleRestore = (u: User) => run(() => usersApi.restore(u.id), `${u.fullName} has been restored.`);
 
   if (loading) return <Loading />;
-  if (error) return <ErrorBox message={error} />;
 
   return (
     <div className="animate-rise">
       <div className="page-header">
         <div>
-          <h1>Users & Roles Directory</h1>
-          <p>SuperAdmin & Administrator control panel. Create staff roles, manage permissions, and govern access with soft-delete protection.</p>
+          <h1>Users & Roles</h1>
+          <p>
+            You are the only Super Admin. Create Admin, Staff and Teacher accounts and control their access.
+          </p>
         </div>
-        <button
-          className="btn btn-primary"
-          type="button"
-          onClick={() => setShowInviteModal((v) => !v)}
-        >
-          {showInviteModal ? 'Close Form' : '+ Create / Invite Staff & Mentors'}
+        <button className="btn btn-primary" type="button" onClick={() => setShowInviteModal((v) => !v)}>
+          {showInviteModal ? 'Close form' : '+ Add team member'}
         </button>
       </div>
 
       {message && <SuccessBox message={message} />}
+      {error && <ErrorBox message={error} />}
 
       {showInviteModal && (
         <form className="panel" onSubmit={handleInviteUser} style={{ marginBottom: '1.25rem', border: '1px solid var(--azure)' }}>
-          <h2>Create Platform Staff / Teacher Account</h2>
+          <h2>New team member</h2>
           <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-            The created user will receive an onboarding email invitation with credentials to log in to the SS Europa Management Portal.
+            They'll get an email with their login details for the SS Europa management portal.
           </p>
           <div className="grid-2">
             <div className="field">
-              <label>First Name</label>
-              <input value={inviteFirstName} onChange={(e) => setInviteFirstName(e.target.value)} required placeholder="e.g. Matteo" />
+              <label htmlFor="invite-first">First name</label>
+              <input id="invite-first" value={inviteFirstName} onChange={(e) => setInviteFirstName(e.target.value)} required placeholder="e.g. Matteo" />
             </div>
             <div className="field">
-              <label>Last Name</label>
-              <input value={inviteLastName} onChange={(e) => setInviteLastName(e.target.value)} required placeholder="e.g. Ricci" />
+              <label htmlFor="invite-last">Last name</label>
+              <input id="invite-last" value={inviteLastName} onChange={(e) => setInviteLastName(e.target.value)} required placeholder="e.g. Ricci" />
             </div>
           </div>
           <div className="grid-3">
             <div className="field">
-              <label>Email Address</label>
-              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required placeholder="mentor@sseuropa.com" />
+              <label htmlFor="invite-email">Email</label>
+              <input id="invite-email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required placeholder="name@sseuropa.com" />
             </div>
             <div className="field">
-              <label>Assigned Role</label>
-              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as '1' | '2' | '3')}>
-                <option value="1">Mentor / Teacher</option>
-                <option value="2">Staff (Admissions / Operations)</option>
-                <option value="3">Administrator</option>
+              <label htmlFor="invite-role">Role</label>
+              <select id="invite-role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as TeamRole)}>
+                {TEAM_ROLES.map((r) => (
+                  <option key={r} value={r}>{roleLabel(r)}</option>
+                ))}
               </select>
             </div>
             <div className="field">
-              <label>Temporary Password</label>
-              <input value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} required placeholder="SSEuropa@2026" />
+              <label htmlFor="invite-password">Temporary password</label>
+              <input
+                id="invite-password"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder="At least 8 characters"
+              />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+            <strong>{roleLabel(inviteRole)}:</strong> {ROLE_HELP[inviteRole]}
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button className="btn btn-primary" type="submit" disabled={submittingInvite}>
-              {submittingInvite ? 'Creating & Sending Email…' : 'Create Account & Send Invite'}
+              {submittingInvite ? 'Creating…' : 'Create account & send invite'}
             </button>
             <button className="btn btn-secondary" type="button" onClick={() => setShowInviteModal(false)}>
               Cancel
@@ -477,105 +485,133 @@ export function UsersPage() {
         </form>
       )}
 
-      <div className="panel">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} style={{ opacity: u.isDeleted ? 0.6 : 1 }}>
-                <td>
-                  <strong>{u.fullName}</strong>
-                  {u.isProtectedSuperAdmin && (
-                    <span style={{ marginLeft: 6, fontSize: '0.75rem', background: 'rgba(212, 175, 55, 0.2)', color: '#d4af37', padding: '2px 6px', borderRadius: 4 }}>
-                      🛡️ Protected SuperAdmin
-                    </span>
-                  )}
-                  {u.isDeleted && (
-                    <span style={{ marginLeft: 6, fontSize: '0.75rem', background: 'rgba(230, 57, 70, 0.2)', color: '#e63946', padding: '2px 6px', borderRadius: 4 }}>
-                      Soft Deleted
-                    </span>
-                  )}
-                </td>
-                <td>{u.email}</td>
-                <td>
-                  <select
-                    value={u.role}
-                    disabled={u.isProtectedSuperAdmin}
-                    onChange={(e) => void changeRole(u, e.target.value)}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      background: 'var(--panel-2, rgba(255,255,255,0.05))',
-                      color: 'inherit',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    <option value="0">Student / User</option>
-                    <option value="1">Mentor / Teacher</option>
-                    <option value="2">Staff</option>
-                    <option value="3">Admin</option>
-                    <option value="4">SuperAdmin</option>
-                  </select>
-                </td>
-                <td>
-                  <span className={`badge ${u.status === 'Active' ? 'badge-success' : 'badge-warn'}`}>
-                    {u.status}
-                  </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <button
-                      className="btn btn-secondary"
-                      type="button"
-                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
-                      disabled={u.isProtectedSuperAdmin}
-                      onClick={() => void toggleStatus(u)}
-                    >
-                      {u.status === 'Active' ? 'Suspend' : 'Activate'}
-                    </button>
+      {/* Role filter */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
+        {(['All', ...TEAM_ROLES] as const).map((r) => {
+          const active = roleFilter === r;
+          const count = r === 'All' ? team.filter((u) => !u.isDeleted).length : countOf(r);
+          return (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRoleFilter(r)}
+              className={`btn ${active ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ fontSize: '0.84rem', padding: '0.35rem 0.8rem' }}
+            >
+              {r === 'All' ? 'Everyone' : `${roleLabel(r)}s`} · {count}
+            </button>
+          );
+        })}
+      </div>
 
-                    {u.isDeleted ? (
-                      <button
-                        className="btn btn-primary"
-                        type="button"
-                        style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
-                        onClick={() => void handleRestore(u)}
-                      >
-                        Restore
-                      </button>
-                    ) : (
-                      !u.isProtectedSuperAdmin && (
-                        <button
-                          type="button"
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(230,57,70,0.4)',
-                            color: '#e63946',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.78rem',
-                            padding: '0.25rem 0.6rem',
-                          }}
-                          onClick={() => void handleSoftDelete(u)}
-                        >
-                          Soft Delete
-                        </button>
-                      )
-                    )}
-                  </div>
-                </td>
+      <div className="panel">
+        {visible.length === 0 ? (
+          <Empty label="No team members yet. Use “Add team member” to create one." />
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visible.map((u) => {
+                const locked = isLocked(u);
+                return (
+                  <tr key={u.id} style={{ opacity: u.isDeleted ? 0.6 : 1 }}>
+                    <td>
+                      <strong>{u.fullName}</strong>
+                      {u.role === 'SuperAdmin' && (
+                        <span style={{ marginLeft: 6, fontSize: '0.75rem', background: 'rgba(212, 175, 55, 0.2)', color: '#b8860b', padding: '2px 6px', borderRadius: 4 }}>
+                          🛡️ Super Admin
+                        </span>
+                      )}
+                      {u.isDeleted && (
+                        <span style={{ marginLeft: 6, fontSize: '0.75rem', background: 'rgba(230, 57, 70, 0.2)', color: '#e63946', padding: '2px 6px', borderRadius: 4 }}>
+                          Removed
+                        </span>
+                      )}
+                    </td>
+                    <td>{u.email}</td>
+                    <td>
+                      {locked || u.isDeleted || !isTeamRole(u.role) ? (
+                        <span className="badge">{roleLabel(u.role)}</span>
+                      ) : (
+                        <select
+                          aria-label={`Role for ${u.fullName}`}
+                          value={u.role}
+                          onChange={(e) => void changeRole(u, e.target.value as TeamRole)}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            background: 'var(--panel-2, rgba(255,255,255,0.05))',
+                            color: 'inherit',
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          {TEAM_ROLES.map((r) => (
+                            <option key={r} value={r}>{roleLabel(r)}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${u.status === 'Active' ? 'badge-success' : 'badge-warn'}`}>{u.status}</span>
+                    </td>
+                    <td>
+                      {locked ? (
+                        <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Locked</span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          {!u.isDeleted && (
+                            <button
+                              className="btn btn-secondary"
+                              type="button"
+                              style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                              onClick={() => void toggleStatus(u)}
+                            >
+                              {u.status === 'Active' ? 'Suspend' : 'Activate'}
+                            </button>
+                          )}
+                          {u.isDeleted ? (
+                            <button
+                              className="btn btn-primary"
+                              type="button"
+                              style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                              onClick={() => void handleRestore(u)}
+                            >
+                              Restore
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(230,57,70,0.4)',
+                                color: '#e63946',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.78rem',
+                                padding: '0.25rem 0.6rem',
+                              }}
+                              onClick={() => void handleRemove(u)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -625,20 +661,23 @@ export function AuditPage() {
 
 
 export function AdminPage() {
+  const { hasRole } = useAuth();
+  const isSuperAdmin = hasRole('SuperAdmin');
   return (
     <div className="animate-rise">
       <div className="page-header">
         <div>
           <h1>Admin console</h1>
-          <p>Operational shortcuts for courses, users, enquiries, and audit oversight.</p>
+          <p>Operational shortcuts for courses, classes, enquiries{isSuperAdmin ? ', team and audit' : ''}.</p>
         </div>
       </div>
       <div className="grid-3">
         <Link className="panel" to="/app/enquiries"><h2>Admissions & Leads</h2><p>Review website contact enquiries and student pipeline.</p></Link>
         <Link className="panel" to="/app/courses"><h2>Courses</h2><p>Publish and manage catalogue capacity.</p></Link>
-        <Link className="panel" to="/app/users"><h2>Users</h2><p>Review roles and account status.</p></Link>
-        <Link className="panel" to="/app/audit"><h2>Security audit</h2><p>Inspect authentication and admin events.</p></Link>
-        <Link className="panel" to="/app/notifications"><h2>Comms</h2><p>Platform notifications feed.</p></Link>
+        <Link className="panel" to="/app/classes"><h2>Live Classes</h2><p>Schedule classes and share join links.</p></Link>
+        {isSuperAdmin && <Link className="panel" to="/app/users"><h2>Users & Roles</h2><p>Create Admin, Staff and Teacher accounts.</p></Link>}
+        {isSuperAdmin && <Link className="panel" to="/app/audit"><h2>Audit Log</h2><p>Inspect authentication and admin events.</p></Link>}
+        <Link className="panel" to="/app/notifications"><h2>Notifications</h2><p>Send updates to students.</p></Link>
       </div>
     </div>
   );

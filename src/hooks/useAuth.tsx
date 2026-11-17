@@ -7,7 +7,10 @@ import {
   type ReactNode,
 } from 'react';
 import { authApi } from '../services/platformApi';
-import type { AuthResponse, User, UserRole } from '../types';
+import { PANEL_ROLES, type AuthResponse, type User, type UserRole } from '../types';
+
+/** Offline "pretend" login when the API can't be reached: local development only, never in production builds. */
+const ALLOW_OFFLINE_DEMO = import.meta.env.DEV;
 
 interface AuthState {
   user: User | null;
@@ -50,6 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applyAuth = useCallback((auth: AuthResponse) => {
     if (auth.requiresOtp || !auth.accessToken) return auth;
+    // Only the four team roles may use the management panel. Students use the student portal/app.
+    if (!PANEL_ROLES.includes(auth.user.role)) {
+      throw new Error('This portal is for the SS Europa team only. Students please sign in on the student portal or mobile app.');
+    }
     persist(auth);
     setUser(auth.user);
     setToken(auth.accessToken);
@@ -64,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return applyAuth(auth);
     } catch (err: unknown) {
       const apiErr = err as { status?: number; message?: string };
-      if (apiErr?.status === 0 || apiErr?.message?.includes('Unable to reach the API')) {
+      if (ALLOW_OFFLINE_DEMO && (apiErr?.status === 0 || apiErr?.message?.includes('Unable to reach the API'))) {
         const cleanEmail = (email || 'superadmin@sseuropa.demo').toLowerCase().trim();
         const role = cleanEmail.includes('super') ? 'SuperAdmin' : 'Admin';
         const fallbackAuth: AuthResponse = {
@@ -105,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return auth;
     } catch (err: unknown) {
       const apiErr = err as { status?: number; message?: string };
-      if (apiErr?.status === 0 || apiErr?.message?.includes('Unable to reach the API')) {
+      if (ALLOW_OFFLINE_DEMO && (apiErr?.status === 0 || apiErr?.message?.includes('Unable to reach the API'))) {
         const cleanEmail = (email || 'admin@sseuropa.demo').toLowerCase().trim();
         const isAdmin = cleanEmail.includes('admin') || cleanEmail.includes('super');
         const role = cleanEmail.includes('super') ? 'SuperAdmin' : isAdmin ? 'Admin' : 'User';
