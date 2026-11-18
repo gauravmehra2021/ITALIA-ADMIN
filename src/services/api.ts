@@ -1,6 +1,7 @@
 import type { ApiResponse } from '../types';
 
-const rawBase = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5080').trim().replace(/\/+$/, '');
+// Live builds must never fall back to a local address.
+const rawBase = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://api.sseuropa.com' : 'http://localhost:5080')).trim().replace(/\/+$/, '');
 export const API_BASE = rawBase.endsWith('/api') ? rawBase.slice(0, -4) : rawBase;
 
 /** Course media paths from the API (/content/…, /uploads/…) become absolute URLs. */
