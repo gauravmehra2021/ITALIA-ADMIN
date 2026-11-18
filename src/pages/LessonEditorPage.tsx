@@ -138,6 +138,7 @@ export function LessonEditorPage() {
   const addBlock = (type: BlockType) => {
     const block = type === 'Vocabulary' ? emptyBlock('Vocabulary', { title: 'New words', items: [emptyWord()] })
       : type === 'Dialogue' ? emptyBlock('Dialogue', { lines: [{ speaker: '', italian: '', english: '' }, { speaker: '', italian: '', english: '' }] })
+      : type === 'Roleplay' ? emptyBlock('Roleplay', { title: 'Speaking practice', caption: 'Partner', lines: [{ speaker: 'Partner', italian: '', english: '', isLearner: false, replies: [] }, { speaker: 'You', italian: '', english: '', isLearner: true, replies: [] }] })
       : type === 'Table' ? emptyBlock('Table', { table: [['', ''], ['', '']] })
       : type === 'Tip' ? emptyBlock('Tip', { title: 'Good to know' })
       : emptyBlock(type);
@@ -251,7 +252,7 @@ export function LessonEditorPage() {
               {draft.blocks.map((b, i) => {
                 const info = BLOCK_LABELS[b.type];
                 const open = openBlock === i;
-                const summary = b.type === 'Vocabulary' ? `${b.items.length} items` : b.type === 'Dialogue' ? `${b.lines.length} lines` : b.type === 'Table' ? `${b.table.length} rows` : (b.title || b.body || b.mediaUrl || '').slice(0, 60);
+                const summary = b.type === 'Vocabulary' ? `${b.items.length} items` : b.type === 'Dialogue' || b.type === 'Roleplay' ? `${b.lines.length} lines` : b.type === 'Table' ? `${b.table.length} rows` : (b.title || b.body || b.mediaUrl || '').slice(0, 60);
                 return (
                   <div key={i} className="b-block">
                     <div className="b-block-head">

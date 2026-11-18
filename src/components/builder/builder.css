@@ -223,3 +223,9 @@
   .b-item-vocab, .b-item-line, .b-item-pair { grid-template-columns: 1fr; }
   .b-item-vocab-extra { grid-column: auto; grid-template-columns: 1fr; }
 }
+
+/* Role-play editor */
+.b-rp { display: flex; flex-direction: column; gap: 0.5rem; border-left: 3px solid var(--primary); }
+.b-rp-you { border-left-color: var(--brand-green, #00894a); background: color-mix(in srgb, var(--green-100, #dcf5e8) 55%, var(--mist)); }
+.b-rp-alts { display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.3rem; }
+.b-rp-alt .b-input { min-height: 34px; font-size: 0.86rem; }

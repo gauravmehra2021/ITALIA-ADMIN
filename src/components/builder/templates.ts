@@ -44,6 +44,15 @@ export function lessonTemplate(kind: LessonKind, title: string): SaveLessonReque
         emptyBlock('Text', { title: 'Read', body: '', caption: '' }),
         emptyBlock('Pdf', { title: 'Unit study sheet (PDF)' }),
       ] };
+    case 'Conversation':
+      return { ...base, estimatedMinutes: 8, xpReward: 30, blocks: [
+        emptyBlock('Text', { title: 'The situation' }),
+        emptyBlock('Roleplay', { title: 'Speaking practice', caption: 'Partner', lines: [
+          { speaker: 'Partner', italian: '', english: '', isLearner: false, replies: [] },
+          { speaker: 'You', italian: '', english: '', isLearner: true, replies: [] },
+        ] }),
+        emptyBlock('Vocabulary', { title: 'Useful phrases', items: [emptyWord()] }),
+      ] };
     case 'Video':
       return { ...base, estimatedMinutes: 10, xpReward: 20, blocks: [
         emptyBlock('Video', { title: 'Watch' }),

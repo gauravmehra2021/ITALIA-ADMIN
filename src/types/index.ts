@@ -421,9 +421,9 @@ export interface UpdateEnquiryStatusRequest {
 
 // ── Curriculum (course builder) ────────────────────────────────────────────
 
-export type LessonKind = 'Vocabulary' | 'Dialogue' | 'Grammar' | 'Review' | 'Video' | 'Exam';
+export type LessonKind = 'Vocabulary' | 'Dialogue' | 'Grammar' | 'Review' | 'Video' | 'Exam' | 'Conversation';
 export type LessonStatus = 'Draft' | 'Published';
-export type BlockType = 'Text' | 'Vocabulary' | 'Dialogue' | 'Video' | 'Audio' | 'Image' | 'Pdf' | 'Tip' | 'Table';
+export type BlockType = 'Text' | 'Vocabulary' | 'Dialogue' | 'Video' | 'Audio' | 'Image' | 'Pdf' | 'Tip' | 'Table' | 'Roleplay';
 export type ExerciseType = 'ListenPick' | 'PickTranslation' | 'PickWord' | 'MatchPairs' | 'FillBlank' | 'WordOrder' | 'TrueFalse';
 
 export interface VocabularyItem {
@@ -442,6 +442,10 @@ export interface DialogueLine {
   italian: string;
   english: string;
   audioUrl?: string | null;
+  /** Role-play: the student's turn. */
+  isLearner?: boolean;
+  /** Role-play: other accepted answers for this turn. */
+  replies?: { italian: string; english: string }[];
 }
 
 export interface LessonBlock {

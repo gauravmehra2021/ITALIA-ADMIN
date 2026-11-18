@@ -12,6 +12,7 @@ export const KIND_META: Record<LessonKind, { label: string; emoji: string; color
   Review: { label: 'Review', emoji: '🏆', color: '#b07400', bg: '#fff4cf', help: 'Unit recap, a reading text, the PDF study sheet and a quiz.' },
   Video: { label: 'Video', emoji: '🎬', color: '#c8202e', bg: '#fde4e6', help: 'A video lesson with notes and optional questions.' },
   Exam: { label: 'Exam', emoji: '📝', color: '#0f1b33', bg: '#eef1f6', help: 'A test in the CILS style.' },
+  Conversation: { label: 'Speaking practice', emoji: '🗣️', color: '#0f766e', bg: '#ccfbf1', help: 'A role-play: students listen to the other person and answer out loud (or tap / type a reply).' },
 };
 
 export function StatusBadge({ status }: { status: LessonStatus | string }) {

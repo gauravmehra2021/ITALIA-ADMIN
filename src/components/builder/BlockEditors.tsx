@@ -7,6 +7,7 @@ export const BLOCK_LABELS: Record<LessonBlock['type'], { label: string; emoji: s
   Text: { label: 'Text / explanation', emoji: '📝', help: 'Use **bold**, *italic* and lines starting with "- " for lists. Add an English translation to turn it into a reading text.' },
   Vocabulary: { label: 'Words & phrases', emoji: '📸', help: 'Words with a picture show as flip cards; without pictures they show as a phrase list. Every item plays Italian audio.' },
   Dialogue: { label: 'Dialogue', emoji: '💬', help: 'A conversation. Students can play each line or the whole dialogue.' },
+  Roleplay: { label: 'Speaking role-play', emoji: '🗣️', help: 'The partner speaks first; on the student\'s turns they tap, type or SAY one of the accepted answers. Add 1–2 extra answers per turn so students can choose.' },
   Table: { label: 'Grammar table', emoji: '📊', help: 'The first row is the header.' },
   Tip: { label: 'Culture / tip box', emoji: '💡', help: 'A short "good to know" note.' },
   Video: { label: 'Video', emoji: '🎬', help: 'Upload an MP4 or paste a YouTube / Vimeo link.' },
@@ -24,6 +25,8 @@ export function BlockEditor({ block, onChange }: Props) {
       return <VocabularyEditor block={block} onChange={onChange} />;
     case 'Dialogue':
       return <DialogueEditor block={block} onChange={onChange} />;
+    case 'Roleplay':
+      return <RoleplayEditor block={block} onChange={onChange} />;
     case 'Table':
       return <TableEditor block={block} onChange={onChange} />;
     case 'Video':
@@ -169,6 +172,77 @@ function TableEditor({ block, onChange }: Props) {
         <button type="button" className="b-btn b-btn-sm" onClick={() => onChange({ ...block, table: [...table, Array(cols).fill('')] })}><Icon.Plus size={15} /> Row</button>
         <button type="button" className="b-btn b-btn-sm" onClick={() => onChange({ ...block, table: table.map((r) => [...r, '']) })}><Icon.Plus size={15} /> Column</button>
         {cols > 1 && <button type="button" className="b-btn b-btn-sm b-btn-ghost" onClick={() => onChange({ ...block, table: table.map((r) => r.slice(0, cols - 1)) })}>− Column</button>}
+      </div>
+    </>
+  );
+}
+
+/** Role-play: partner lines and student turns (each with extra accepted answers). */
+function RoleplayEditor({ block, onChange }: Props) {
+  const lines = block.lines;
+  const partner = block.caption || 'Partner';
+  type Line = LessonBlock['lines'][number];
+  const setLines = (next: Line[]) => onChange({ ...block, lines: next });
+  const setLine = (i: number, patch: Partial<Line>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const addLine = (isLearner: boolean) =>
+    setLines([...lines, { speaker: isLearner ? 'You' : partner, italian: '', english: '', isLearner, replies: [] }]);
+
+  return (
+    <>
+      <TitleField block={block} set={(p) => onChange({ ...block, ...p })} />
+      <div className="b-field">
+        <label className="b-label">Who does the student talk to?</label>
+        <input
+          className="b-input"
+          placeholder="e.g. Waiter, Doctor, Landlord"
+          value={block.caption ?? ''}
+          onChange={(e) => onChange({ ...block, caption: e.target.value, lines: lines.map((l) => (l.isLearner ? l : { ...l, speaker: e.target.value || 'Partner' })) })}
+        />
+      </div>
+      <div className="b-rows">
+        {lines.map((l, i) => (
+          <div key={i} className={`b-item b-rp ${l.isLearner ? 'b-rp-you' : ''}`}>
+            <div className="b-between">
+              <span className={`b-badge ${l.isLearner ? 'b-badge-green' : 'b-badge-blue'}`}>{l.isLearner ? 'Student\'s turn' : partner}</span>
+              <div className="b-row" style={{ gap: 4 }}>
+                <button type="button" className="b-btn b-btn-sm b-btn-ghost" onClick={() => setLine(i, { isLearner: !l.isLearner, speaker: l.isLearner ? partner : 'You', replies: l.replies ?? [] })}>
+                  Switch to {l.isLearner ? partner : 'student'}
+                </button>
+                <button type="button" className="b-icon-btn b-danger" title="Remove line" onClick={() => setLines(lines.filter((_, j) => j !== i))}><Icon.X size={15} /></button>
+              </div>
+            </div>
+            <div className="b-grid-2">
+              <div className="b-row">
+                <input className="b-input b-input-it" placeholder={l.isLearner ? 'Best answer (Italian)' : 'Italian line'} value={l.italian} onChange={(e) => setLine(i, { italian: e.target.value })} />
+                <ListenButton text={l.italian} />
+              </div>
+              <input className="b-input" placeholder="English" value={l.english} onChange={(e) => setLine(i, { english: e.target.value })} />
+            </div>
+            {l.isLearner && (
+              <div className="b-rp-alts">
+                <span className="b-small b-muted">Other accepted answers</span>
+                {(l.replies ?? []).map((r, k) => (
+                  <div key={k} className="b-grid-2 b-rp-alt">
+                    <input className="b-input b-input-it" placeholder="Another answer (Italian)" value={r.italian}
+                      onChange={(e) => setLine(i, { replies: (l.replies ?? []).map((x, m) => (m === k ? { ...x, italian: e.target.value } : x)) })} />
+                    <div className="b-row">
+                      <input className="b-input" placeholder="English" value={r.english}
+                        onChange={(e) => setLine(i, { replies: (l.replies ?? []).map((x, m) => (m === k ? { ...x, english: e.target.value } : x)) })} />
+                      <button type="button" className="b-icon-btn b-danger" title="Remove answer" onClick={() => setLine(i, { replies: (l.replies ?? []).filter((_, m) => m !== k) })}><Icon.X size={15} /></button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="b-btn b-btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setLine(i, { replies: [...(l.replies ?? []), { italian: '', english: '' }] })}>
+                  <Icon.Plus size={15} /> Another answer
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="b-row b-wrap">
+        <button type="button" className="b-btn b-btn-sm" onClick={() => addLine(false)}><Icon.Plus size={15} /> {partner} says</button>
+        <button type="button" className="b-btn b-btn-sm b-btn-green" onClick={() => addLine(true)}><Icon.Plus size={15} /> Student answers</button>
       </div>
     </>
   );
