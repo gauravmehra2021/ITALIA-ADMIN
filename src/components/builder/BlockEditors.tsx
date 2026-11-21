@@ -108,6 +108,7 @@ function VocabularyEditor({ block, onChange }: Props) {
               <button type="button" className="b-icon-btn" title="Remove" onClick={() => remove(i)}><Icon.X size={15} /></button>
             </div>
             <div className="b-item-vocab-extra">
+              <input className="b-input" placeholder="Punjabi (optional), e.g. Seb" value={it.punjabi ?? ''} onChange={(e) => setItem(i, { punjabi: e.target.value })} />
               <input className="b-input" placeholder="Example in Italian (optional)" value={it.example ?? ''} onChange={(e) => setItem(i, { example: e.target.value })} />
               <input className="b-input" placeholder="Example in English" value={it.exampleEnglish ?? ''} onChange={(e) => setItem(i, { exampleEnglish: e.target.value })} />
             </div>
@@ -134,6 +135,7 @@ function DialogueEditor({ block, onChange }: Props) {
               <ListenButton text={l.italian} />
             </div>
             <input className="b-input" placeholder="English translation" value={l.english} onChange={(e) => setLine(i, { english: e.target.value })} />
+            <input className="b-input" placeholder="Punjabi (optional)" value={l.punjabi ?? ''} onChange={(e) => setLine(i, { punjabi: e.target.value })} />
             <button type="button" className="b-icon-btn" title="Remove line" onClick={() => onChange({ ...block, lines: lines.filter((_, j) => j !== i) })}><Icon.X size={15} /></button>
           </div>
         ))}

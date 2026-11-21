@@ -12,7 +12,7 @@ export const emptyBlock = (type: LessonBlock['type'], extra: Partial<LessonBlock
   ...extra,
 });
 
-export const emptyWord = () => ({ italian: '', english: '', pronunciation: '', imageUrl: null, audioUrl: null, example: '', exampleEnglish: '' });
+export const emptyWord = () => ({ italian: '', english: '', punjabi: '', pronunciation: '', imageUrl: null, audioUrl: null, example: '', exampleEnglish: '' });
 
 /** Starting structure for a new lesson of each kind (same structure as the built-in A1 course). */
 export function lessonTemplate(kind: LessonKind, title: string): SaveLessonRequest {

@@ -430,6 +430,8 @@ export interface VocabularyItem {
   id?: string;
   italian: string;
   english: string;
+  /** Optional Punjabi meaning (romanised). */
+  punjabi?: string | null;
   pronunciation?: string | null;
   imageUrl?: string | null;
   audioUrl?: string | null;
@@ -441,6 +443,7 @@ export interface DialogueLine {
   speaker: string;
   italian: string;
   english: string;
+  punjabi?: string | null;
   audioUrl?: string | null;
   /** Role-play: the student's turn. */
   isLearner?: boolean;

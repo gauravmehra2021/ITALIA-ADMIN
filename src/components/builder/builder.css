@@ -150,8 +150,8 @@
 .b-rows { display: flex; flex-direction: column; gap: 0.5rem; }
 .b-item { display: grid; gap: 0.5rem; padding: 0.6rem; border-radius: 12px; border: 1px solid var(--card-border-subtle); background: var(--mist); }
 .b-item-vocab { grid-template-columns: 56px minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; }
-.b-item-vocab-extra { grid-column: 2 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-.b-item-line { grid-template-columns: 120px minmax(0, 1.4fr) minmax(0, 1.4fr) auto; align-items: center; }
+.b-item-vocab-extra { grid-column: 2 / -1; display: grid; grid-template-columns: 0.8fr 1fr 1fr; gap: 0.5rem; }
+.b-item-line { grid-template-columns: 120px minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; }
 .b-item-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; }
 
 .b-table-edit { overflow-x: auto; }
