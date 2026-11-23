@@ -29,6 +29,10 @@ import type {
   TestAttempt,
   UpdateEnquiryStatusRequest,
   User,
+  Student,
+  StudentPasswordResult,
+  Batch,
+  TeacherOption,
 } from '../types';
 
 export const authApi = {
@@ -273,3 +277,33 @@ export const curriculumApi = {
   moveLesson: (lessonId: string, direction: -1 | 1) => api.post(`/api/curriculum/lessons/${lessonId}/move`, { direction }),
   deleteLesson: (lessonId: string) => api.delete(`/api/curriculum/lessons/${lessonId}`),
 };
+
+export const studentsApi = {
+  list: () => api.get<Student[]>('/api/students'),
+  create: (data: { firstName: string; lastName: string; email: string; phoneNumber?: string; batchId?: string | null; preferredLanguage?: string }) =>
+    api.post<StudentPasswordResult>('/api/students', data),
+  update: (id: string, data: { firstName: string; lastName: string; phoneNumber?: string | null; batchId?: string | null; preferredLanguage?: string }) =>
+    api.put<Student>(`/api/students/${id}`, data),
+  /** batchId null = take the students out of their batch. */
+  move: (studentIds: string[], batchId: string | null) =>
+    api.post<{ moved: number; batchName?: string | null }>('/api/students/move', { studentIds, batchId }),
+  setStatus: (id: string, isActive: boolean) => api.put<Student>(`/api/students/${id}/status`, { isActive }),
+  resetPassword: (id: string) => api.post<StudentPasswordResult>(`/api/students/${id}/reset-password`),
+};
+
+export const batchesApi = {
+  list: () => api.get<Batch[]>('/api/batches'),
+  teachers: () => api.get<TeacherOption[]>('/api/batches/teachers'),
+  create: (data: SaveBatch) => api.post<Batch>('/api/batches', data),
+  update: (id: string, data: SaveBatch) => api.put<Batch>(`/api/batches/${id}`, data),
+  delete: (id: string) => api.delete(`/api/batches/${id}`),
+};
+
+export interface SaveBatch {
+  name: string;
+  level: string;
+  description?: string;
+  mentorId?: string | null;
+  courseIds: string[];
+  startDateUtc?: string | null;
+}

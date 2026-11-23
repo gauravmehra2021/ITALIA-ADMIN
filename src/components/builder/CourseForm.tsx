@@ -31,6 +31,7 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(course?.thumbnailUrl ?? null);
   const [status, setStatus] = useState(enumName(course?.status, ['Draft', 'Published', 'Archived']));
   const [displayOrder, setDisplayOrder] = useState(course?.displayOrder ?? 0);
+  const [openToAll, setOpenToAll] = useState(course?.openToAll ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +51,7 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
       thumbnailUrl,
       status,
       displayOrder: Number(displayOrder) || 0,
+      openToAll,
       capacity: course?.capacity ?? 9999,
       mentorId: course?.mentorId ?? null,
       language: 'Italian',
@@ -116,6 +118,10 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
         <label className="b-label" htmlFor="c-order">Order in catalogue</label>
         <input id="c-order" className="b-input" type="number" value={displayOrder} onChange={(e) => setDisplayOrder(Number(e.target.value))} />
       </div>
+      <label className="b-check">
+        <input type="checkbox" checked={openToAll} onChange={(e) => setOpenToAll(e.target.checked)} />
+        Open to every student (e.g. a free demo course). Other courses are opened only through a batch.
+      </label>
       <div className="b-row" style={{ justifyContent: 'flex-end' }}>
         {onCancel && <button type="button" className="b-btn" onClick={onCancel}>Cancel</button>}
         <button className="b-btn b-btn-primary" disabled={busy}>{busy ? 'Saving…' : submitLabel ?? (course ? 'Save changes' : 'Create course')}</button>

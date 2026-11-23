@@ -18,6 +18,13 @@ const NAV: NavGroup[] = [
   { title: 'Overview', items: [{ to: '/app', label: 'Dashboard', icon: 'Grid', roles: ALL, end: true }] },
   { title: 'Admissions', items: [{ to: '/app/enquiries', label: 'Admissions & Leads', icon: 'Inbox', roles: ['SuperAdmin', 'Admin', 'Staff'] }] },
   {
+    title: 'Students',
+    items: [
+      { to: '/app/students', label: 'Students', icon: 'Users', roles: ALL },
+      { to: '/app/batches', label: 'Batches', icon: 'Layers', roles: ALL },
+    ],
+  },
+  {
     title: 'Teaching',
     items: [
       { to: '/app/courses', label: 'Courses & Content', icon: 'Book', roles: TEACHING },

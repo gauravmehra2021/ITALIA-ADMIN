@@ -13,6 +13,8 @@ import { AdminPage, CertificatesPage } from '../pages/MiscPages';
 import { AuditPage } from '../pages/AuditPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { UsersPage } from '../pages/UsersPage';
+import { StudentsPage } from '../pages/StudentsPage';
+import { BatchesPage } from '../pages/BatchesPage';
 import { ProgressPage } from '../pages/ProgressPage';
 import { TranslationsPage } from '../pages/TranslationsPage';
 import type { ReactNode } from 'react';
@@ -50,6 +52,22 @@ export function AppRouter() {
           element={
             <RoleGate roles={['Staff', 'Admin', 'SuperAdmin']}>
               <EnquiriesPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="students"
+          element={
+            <RoleGate roles={['SuperAdmin', 'Admin', 'Staff', 'Mentor']}>
+              <StudentsPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="batches"
+          element={
+            <RoleGate roles={['SuperAdmin', 'Admin', 'Staff', 'Mentor']}>
+              <BatchesPage />
             </RoleGate>
           }
         />

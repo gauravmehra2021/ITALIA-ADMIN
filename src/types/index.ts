@@ -68,6 +68,8 @@ export interface Course {
   lessonsCount?: number;
   cefrLevel?: string;
   category?: string;
+  /** Every student may join it, even without a batch. */
+  openToAll?: boolean;
 }
 
 export interface CourseStats {
@@ -604,3 +606,61 @@ export interface TranslationPage {
   translatedHindi: number;
   translatedUrdu: number;
 }
+
+/* ── Students & batches ──────────────────────────────────────────────────── */
+
+export interface Student {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string | null;
+  status: string;
+  emailVerified: boolean;
+  preferredLanguage: string;
+  batchId?: string | null;
+  batchName?: string | null;
+  /** Created by the team (true) or signed up on their own (false). */
+  addedByStaff: boolean;
+  /** Still using the temporary password. */
+  mustChangePassword: boolean;
+  createdAtUtc: string;
+  lastLoginAtUtc?: string | null;
+  activeCourses: number;
+  progressPercent: number;
+  isDeleted: boolean;
+}
+
+export interface StudentPasswordResult {
+  student: Student;
+  temporaryPassword: string;
+}
+
+export interface BatchCourse {
+  id: string;
+  title: string;
+  cefrLevel: string;
+  status: CourseStatus | number;
+}
+
+export interface Batch {
+  id: string;
+  name: string;
+  level: string;
+  description: string;
+  mentorId?: string | null;
+  mentorName?: string | null;
+  courses: BatchCourse[];
+  startDateUtc?: string | null;
+  studentCount: number;
+  createdAtUtc: string;
+}
+
+export interface TeacherOption {
+  id: string;
+  fullName: string;
+  role: UserRole;
+}
+
+export const BATCH_LEVELS = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'] as const;
