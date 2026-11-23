@@ -237,6 +237,21 @@ export const enquiriesApi = {
 
 // ── Course builder ─────────────────────────────────────────────────────────
 
+/** Punjabi / Hindi / Urdu translations of the lesson content (Translations page). */
+export const translationsApi = {
+  list: (params: { courseId?: string; missing?: string; search?: string; page?: number; pageSize?: number }) => {
+    const q = new URLSearchParams();
+    if (params.courseId) q.set('courseId', params.courseId);
+    if (params.missing) q.set('missing', params.missing);
+    if (params.search) q.set('search', params.search);
+    q.set('page', String(params.page ?? 1));
+    q.set('pageSize', String(params.pageSize ?? 30));
+    return api.get<import('../types').TranslationPage>(`/api/translations?${q}`);
+  },
+  save: (body: { source: string; punjabi?: string | null; hindi?: string | null; urdu?: string | null }) =>
+    api.put<import('../types').TranslationItem>('/api/translations', body),
+};
+
 export const curriculumApi = {
   outline: (courseId: string) => api.get<import('../types').CourseOutline>(`/api/curriculum/courses/${courseId}`),
   students: (courseId: string) => api.get<import('../types').StudentCourseProgress[]>(`/api/curriculum/courses/${courseId}/students`),

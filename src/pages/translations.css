@@ -1,0 +1,41 @@
+/* Translations page */
+
+.tr-toolbar { align-items: center; }
+.tr-course { max-width: 320px; min-width: 220px; }
+
+.tr-list { overflow: hidden; transition: opacity 0.15s; }
+.tr-list.is-loading { opacity: 0.6; pointer-events: none; }
+
+.tr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)) 92px;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+.tr-row:first-child { border-top: 0; }
+.tr-row.dirty { background: color-mix(in srgb, var(--gold-100) 45%, transparent); }
+.tr-head {
+  font-size: 0.74rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); background: var(--surface-2); padding-top: 10px; padding-bottom: 10px;
+}
+.tr-source { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.45; color: var(--ink); padding-top: 8px; overflow-wrap: anywhere; }
+.tr-input { width: 100%; font-size: 0.9rem; }
+textarea.tr-input { resize: vertical; min-height: 64px; line-height: 1.45; }
+.tr-input:lang(hi) { font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', system-ui, sans-serif; }
+.tr-input:lang(ur) { font-family: 'Plus Jakarta Sans', 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'Noto Naskh Arabic', system-ui, sans-serif; line-height: 2; }
+.tr-actions { display: flex; justify-content: flex-end; padding-top: 4px; }
+.tr-saved { display: inline-flex; align-items: center; gap: 4px; font-size: 0.82rem; font-weight: 700; color: var(--green-600); min-height: 34px; }
+
+.tr-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--surface-2); flex-wrap: wrap; }
+.tr-pager .row { display: flex; gap: 8px; }
+
+@media (max-width: 900px) {
+  .tr-row { grid-template-columns: 1fr; gap: 8px; }
+  .tr-head { display: none; }
+  .tr-source { font-weight: 700; padding-top: 0; }
+  .tr-input:lang(ur) { font-family: 'Plus Jakarta Sans', 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'Noto Naskh Arabic', system-ui, sans-serif; line-height: 2; }
+.tr-actions { justify-content: flex-start; }
+  .tr-course { max-width: none; width: 100%; }
+}

@@ -21,6 +21,7 @@ const NAV: NavGroup[] = [
     title: 'Teaching',
     items: [
       { to: '/app/courses', label: 'Courses & Content', icon: 'Book', roles: TEACHING },
+      { to: '/app/translations', label: 'Translations', icon: 'Globe', roles: TEACHING },
       { to: '/app/classes', label: 'Live Classes', icon: 'Video', roles: TEACHING },
     ],
   },

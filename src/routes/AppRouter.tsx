@@ -14,6 +14,7 @@ import { AuditPage } from '../pages/AuditPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { UsersPage } from '../pages/UsersPage';
 import { ProgressPage } from '../pages/ProgressPage';
+import { TranslationsPage } from '../pages/TranslationsPage';
 import type { ReactNode } from 'react';
 import { PANEL_ROLES, type UserRole } from '../types';
 
@@ -73,6 +74,14 @@ export function AppRouter() {
           element={
             <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
               <LessonEditorPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="translations"
+          element={
+            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+              <TranslationsPage />
             </RoleGate>
           }
         />

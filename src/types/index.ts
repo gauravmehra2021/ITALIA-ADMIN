@@ -586,3 +586,21 @@ export interface Illustration {
   name: string;
   url: string;
 }
+
+// ── Content translations (Punjabi / Hindi / Urdu) ─────────────────────────────────
+
+export interface TranslationItem {
+  source: string;
+  punjabi?: string | null;
+  hindi?: string | null;
+  urdu?: string | null;
+  updatedAtUtc?: string | null;
+}
+
+export interface TranslationPage {
+  page: PagedResult<TranslationItem>;
+  totalTexts: number;
+  translatedPunjabi: number;
+  translatedHindi: number;
+  translatedUrdu: number;
+}
