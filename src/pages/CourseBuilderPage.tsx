@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { KIND_META, MediaField, Modal, StatusBadge } from '../components/builder/BuilderKit';
 import { CourseForm } from '../components/builder/CourseForm';
 import { lessonTemplate } from '../components/builder/templates';
-import type { CourseOutline, CourseUnit, LessonKind, SaveUnitRequest, StudentCourseProgress } from '../types';
+import type { CourseModule, CourseOutline, CourseUnit, LessonKind, SaveModuleRequest, SaveUnitRequest, StudentCourseProgress } from '../types';
 import '../components/builder/builder.css';
 
 type Tab = 'curriculum' | 'students' | 'settings';
@@ -21,7 +21,8 @@ export function CourseBuilderPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('curriculum');
   const [unitModal, setUnitModal] = useState<{ unit?: CourseUnit } | null>(null);
-  const [lessonModal, setLessonModal] = useState<{ unit: CourseUnit } | null>(null);
+  const [lessonModal, setLessonModal] = useState<{ unit: CourseUnit; module: CourseModule } | null>(null);
+  const [moduleModal, setModuleModal] = useState<{ unit: CourseUnit; module?: CourseModule } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -58,7 +59,8 @@ export function CourseBuilderPage() {
 
   const { course, units } = outline;
   const status = typeof course.status === 'number' ? ['Draft', 'Published', 'Archived'][course.status] : course.status;
-  const lessonCount = units.reduce((n, u) => n + u.lessons.length, 0);
+  const lessonCount = units.reduce((n, u) => n + u.lessons.filter((l) => !l.videoPending).length, 0);
+  const moduleCount = units.reduce((n, u) => n + (u.modules?.length ?? 0), 0);
   const draftCount = units.reduce((n, u) => n + u.lessons.filter((l) => l.status === 'Draft').length + (u.status === 'Draft' ? 1 : 0), 0);
 
   return (
@@ -74,6 +76,7 @@ export function CourseBuilderPage() {
             <div className="b-row b-wrap" style={{ marginTop: '0.4rem' }}>
               <StatusBadge status={String(status)} />
               <span className="b-badge b-badge-blue">{units.length} units</span>
+              <span className="b-badge b-badge-blue">{moduleCount} modules</span>
               <span className="b-badge b-badge-blue">{lessonCount} lessons</span>
               <span className="b-badge b-badge-gold"><Icon.Cap size={13} /> {course.enrolledCount} {course.enrolledCount === 1 ? 'student' : 'students'}</span>
             </div>
@@ -105,7 +108,7 @@ export function CourseBuilderPage() {
       {tab === 'curriculum' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="b-alert b-alert-info">
-            Each <strong>unit</strong> is one week: 3–4 short lessons (Words → Dialogue → Grammar → Review), a PDF study sheet and a live speaking class. Students unlock lessons in order and only see <strong>published</strong> units and lessons.
+            Each <strong>unit</strong> is split into <strong>modules</strong>. Every module starts with its <strong>video lesson</strong> (add the video when it is ready; until then students see “video coming soon” and can continue), then short lessons. Students open modules one after another: the next module unlocks when every lesson of the previous one is done and its test is passed. They only see <strong>published</strong> units and lessons.
           </div>
 
           {units.length === 0 && (
@@ -135,31 +138,70 @@ export function CourseBuilderPage() {
                 </div>
               </div>
               <div className="b-lessons">
-                {u.lessons.map((l, li) => {
-                  const meta = KIND_META[l.kind];
+                {(u.modules ?? []).map((m, mi, mods) => {
+                  const studyLessons = m.lessons.filter((l) => !l.isModuleVideo);
                   return (
-                    <div key={l.id} className="b-lesson">
-                      <span className="b-lesson-icon" style={{ background: meta.bg, color: meta.color }}>{meta.emoji}</span>
-                      <Link to={`/app/courses/${course.id}/lessons/${l.id}`} className="b-grow">
-                        <div className="b-lesson-title">{l.order}. {l.title}</div>
-                        <div className="b-lesson-meta">
-                          {meta.label} · {l.estimatedMinutes} min · {l.vocabularyCount} words · {l.exerciseCount} exercises
-                          {l.hasVideo ? ' · 🎬 video' : ''}{l.hasPdf ? ' · 📄 PDF' : ''}{l.isFreePreview ? ' · free preview' : ''}
+                    <section key={m.id} className="b-module">
+                      <div className="b-module-head">
+                        <span className="b-module-num">Module {m.order}</span>
+                        <div className="b-grow">
+                          <div className="b-module-title">{m.title}</div>
+                          {m.description && <div className="b-lesson-meta">{m.description}</div>}
                         </div>
-                      </Link>
-                      <StatusBadge status={l.status} />
-                      <div className="b-lesson-tools">
-                        <button className="b-icon-btn" title="Move up" disabled={li === 0 || busy} onClick={() => void act(() => curriculumApi.moveLesson(l.id, -1))}><Icon.ArrowUp size={15} /></button>
-                        <button className="b-icon-btn" title="Move down" disabled={li === u.lessons.length - 1 || busy} onClick={() => void act(() => curriculumApi.moveLesson(l.id, 1))}><Icon.ArrowDown size={15} /></button>
-                        <Link className="b-btn b-btn-sm" to={`/app/courses/${course.id}/lessons/${l.id}`}>Edit</Link>
-                        <button className="b-icon-btn b-danger" title="Delete lesson" disabled={busy}
-                          onClick={() => confirm(`Delete lesson "${l.title}"?`) && void act(() => curriculumApi.deleteLesson(l.id), 'Lesson deleted.')}><Icon.Trash size={15} /></button>
+                        {m.isTest
+                          ? <span className="b-badge b-badge-blue">📝 Test module · no video</span>
+                          : m.videoReady
+                            ? <span className="b-badge b-badge-green">🎬 Video ready</span>
+                            : <span className="b-badge b-badge-gold">🎬 Video coming soon</span>}
+                        <span className="b-badge b-badge-blue">{m.totalLessons} {m.totalLessons === 1 ? 'lesson' : 'lessons'}</span>
+                        <div className="b-unit-tools">
+                          <button className="b-icon-btn" title="Move module up" disabled={mi === 0 || busy} onClick={() => void act(() => curriculumApi.moveModule(m.id, -1))}><Icon.ArrowUp size={15} /></button>
+                          <button className="b-icon-btn" title="Move module down" disabled={mi === mods.length - 1 || busy} onClick={() => void act(() => curriculumApi.moveModule(m.id, 1))}><Icon.ArrowDown size={15} /></button>
+                          <button className="b-btn b-btn-sm" onClick={() => setModuleModal({ unit: u, module: m })}>Edit module</button>
+                          <button className="b-icon-btn b-danger" title="Delete module" disabled={busy}
+                            onClick={() => confirm(`Delete module "${m.title}" with its video and ${studyLessons.length} lessons? Students' progress in these lessons is deleted too.`) && void act(() => curriculumApi.deleteModule(m.id), 'Module deleted.')}><Icon.Trash size={15} /></button>
+                        </div>
                       </div>
-                    </div>
+                      {m.lessons.map((l) => {
+                        const meta = KIND_META[l.kind];
+                        const si = studyLessons.findIndex((s) => s.id === l.id);
+                        return (
+                          <div key={l.id} className={`b-lesson ${l.isModuleVideo ? 'b-lesson-video' : ''}`}>
+                            <span className="b-lesson-icon" style={{ background: meta.bg, color: meta.color }}>{meta.emoji}</span>
+                            <Link to={`/app/courses/${course.id}/lessons/${l.id}`} className="b-grow">
+                              <div className="b-lesson-title">{l.order}. {l.title}</div>
+                              <div className="b-lesson-meta">
+                                {l.isModuleVideo
+                                  ? (l.videoPending ? 'Module video · always first · add the video when it is ready (students skip it until then)' : 'Module video · always first · students watch it before the lessons')
+                                  : <>{meta.label} · {l.estimatedMinutes} min · {l.vocabularyCount} words · {l.exerciseCount} exercises
+                                    {l.hasVideo ? ' · 🎬 video' : ''}{l.hasPdf ? ' · 📄 PDF' : ''}{l.isFreePreview ? ' · free preview' : ''}</>}
+                              </div>
+                            </Link>
+                            <StatusBadge status={l.status} />
+                            <div className="b-lesson-tools">
+                              {l.isModuleVideo ? (
+                                <Link className="b-btn b-btn-sm" to={`/app/courses/${course.id}/lessons/${l.id}`}>{l.videoPending ? 'Add video' : 'Edit'}</Link>
+                              ) : (
+                                <>
+                                  <button className="b-icon-btn" title="Move up" disabled={si <= 0 || busy} onClick={() => void act(() => curriculumApi.moveLesson(l.id, -1))}><Icon.ArrowUp size={15} /></button>
+                                  <button className="b-icon-btn" title="Move down" disabled={si === studyLessons.length - 1 || busy} onClick={() => void act(() => curriculumApi.moveLesson(l.id, 1))}><Icon.ArrowDown size={15} /></button>
+                                  <Link className="b-btn b-btn-sm" to={`/app/courses/${course.id}/lessons/${l.id}`}>Edit</Link>
+                                  <button className="b-icon-btn b-danger" title="Delete lesson" disabled={busy}
+                                    onClick={() => confirm(`Delete lesson "${l.title}"?`) && void act(() => curriculumApi.deleteLesson(l.id), 'Lesson deleted.')}><Icon.Trash size={15} /></button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="b-add-row">
+                        <button className="b-btn b-btn-sm" onClick={() => setLessonModal({ unit: u, module: m })}><Icon.Plus size={15} /> Add lesson to this module</button>
+                      </div>
+                    </section>
                   );
                 })}
                 <div className="b-add-row">
-                  <button className="b-btn b-btn-sm" onClick={() => setLessonModal({ unit: u })}><Icon.Plus size={15} /> Add lesson</button>
+                  <button className="b-btn b-btn-sm b-btn-primary" onClick={() => setModuleModal({ unit: u })}><Icon.Plus size={15} /> Add module</button>
                   {u.pdfUrl && <a className="b-btn b-btn-sm b-btn-ghost" href={mediaUrl(u.pdfUrl) ?? '#'} target="_blank" rel="noreferrer">📄 Study sheet</a>}
                 </div>
               </div>
@@ -200,11 +242,20 @@ export function CourseBuilderPage() {
       )}
 
       {lessonModal && (
-        <NewLessonModal unit={lessonModal.unit} onClose={() => setLessonModal(null)}
+        <NewLessonModal unit={lessonModal.unit} module={lessonModal.module} onClose={() => setLessonModal(null)}
           onCreate={async (kind, title) => {
-            const lesson = await curriculumApi.createLesson(lessonModal.unit.id, lessonTemplate(kind, title));
+            const lesson = await curriculumApi.createLessonInModule(lessonModal.module.id, lessonTemplate(kind, title));
             navigate(`/app/courses/${course.id}/lessons/${lesson.id}`);
           }} />
+      )}
+
+      {moduleModal && (
+        <ModuleModal unit={moduleModal.unit} module={moduleModal.module} onClose={() => setModuleModal(null)}
+          onSave={(body) => act(async () => {
+            if (moduleModal.module) await curriculumApi.updateModule(moduleModal.module.id, body);
+            else await curriculumApi.createModule(moduleModal.unit.id, body);
+            setModuleModal(null);
+          }, moduleModal.module ? 'Module saved.' : 'Module added with its video lesson. Add the video when it is ready.')} />
       )}
     </div>
   );
@@ -261,7 +312,48 @@ function UnitModal({ unit, onClose, onSave }: { unit?: CourseUnit; onClose: () =
   );
 }
 
-function NewLessonModal({ unit, onClose, onCreate }: { unit: CourseUnit; onClose: () => void; onCreate: (kind: LessonKind, title: string) => Promise<void> }) {
+function ModuleModal({ unit, module, onClose, onSave }: { unit: CourseUnit; module?: CourseModule; onClose: () => void; onSave: (body: SaveModuleRequest) => Promise<void> }) {
+  const [title, setTitle] = useState(module?.title ?? '');
+  const [titleIt, setTitleIt] = useState(module?.titleIt ?? '');
+  const [description, setDescription] = useState(module?.description ?? '');
+  const [imageUrl, setImageUrl] = useState<string | null>(module?.imageUrl ?? null);
+  const [isTest, setIsTest] = useState(module?.isTest ?? false);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await onSave({ title: title.trim(), titleIt: titleIt.trim(), description: description.trim(), imageUrl, isTest });
+    setSaving(false);
+  }
+
+  return (
+    <Modal title={module ? `Edit module ${module.order} of Unit ${unit.order}` : `New module in Unit ${unit.order}`} onClose={onClose}
+      footer={<><button className="b-btn" onClick={onClose}>Cancel</button><button className="b-btn b-btn-primary" disabled={!title.trim() || saving} onClick={() => void save()}>{saving ? 'Saving…' : module ? 'Save module' : 'Create module'}</button></>}>
+      {!module && !isTest && <div className="b-alert b-alert-info">The module starts with a <strong>video lesson</strong> automatically. Add the video to it when it is ready — until then students see “video coming soon” and can go on.</div>}
+      <div className="b-grid-2">
+        <div className="b-field">
+          <label className="b-label" htmlFor="m-title">Title (English)</label>
+          <input id="m-title" className="b-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Introducing yourself" autoFocus />
+        </div>
+        <div className="b-field">
+          <label className="b-label" htmlFor="m-title-it">Title (Italian)</label>
+          <input id="m-title-it" className="b-input b-input-it" value={titleIt} onChange={(e) => setTitleIt(e.target.value)} placeholder="e.g. Presentarsi" />
+        </div>
+      </div>
+      <div className="b-field">
+        <label className="b-label" htmlFor="m-desc">Short description (shown on the module card)</label>
+        <textarea id="m-desc" className="b-textarea" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Say your name, where you are from and how old you are" />
+      </div>
+      <MediaField kind="image" label="Card illustration (optional)" value={imageUrl} onChange={setImageUrl} />
+      <label className="b-check">
+        <input type="checkbox" checked={isTest} onChange={(e) => setIsTest(e.target.checked)} />
+        Test module (e.g. the chapter test): no video lesson. Add the test as a “Test” lesson.
+      </label>
+    </Modal>
+  );
+}
+
+function NewLessonModal({ unit, module, onClose, onCreate }: { unit: CourseUnit; module: CourseModule; onClose: () => void; onCreate: (kind: LessonKind, title: string) => Promise<void> }) {
   const [kind, setKind] = useState<LessonKind>('Vocabulary');
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -279,7 +371,7 @@ function NewLessonModal({ unit, onClose, onCreate }: { unit: CourseUnit; onClose
   }
 
   return (
-    <Modal title={`New lesson in Unit ${unit.order}`} onClose={onClose}
+    <Modal title={`New lesson in Unit ${unit.order} · Module ${module.order}`} onClose={onClose}
       footer={<><button className="b-btn" onClick={onClose}>Cancel</button><button className="b-btn b-btn-primary" disabled={!title.trim() || busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create and edit'}</button></>}>
       {error && <div className="b-alert b-alert-error">{error}</div>}
       <label className="b-label">Lesson type</label>

@@ -500,6 +500,11 @@ export interface LessonSummary {
   hasVideo: boolean;
   hasAudio: boolean;
   hasPdf: boolean;
+  moduleId?: string | null;
+  /** The video lesson every module starts with. */
+  isModuleVideo?: boolean;
+  /** Module video that has no video yet ("coming soon"). */
+  videoPending?: boolean;
 }
 
 export interface CourseUnit {
@@ -515,6 +520,7 @@ export interface CourseUnit {
   liveClassFocus?: string | null;
   status: LessonStatus;
   lessons: LessonSummary[];
+  modules?: CourseModule[];
 }
 
 export interface CourseOutline {
@@ -542,6 +548,10 @@ export interface LessonDetail {
   homework?: string | null;
   previousLessonId?: string | null;
   nextLessonId?: string | null;
+  moduleId?: string | null;
+  moduleTitle?: string | null;
+  isModuleVideo?: boolean;
+  videoPending?: boolean;
 }
 
 export interface SaveUnitRequest {
@@ -568,6 +578,7 @@ export interface SaveLessonRequest {
   exercises: LessonExercise[];
   homework?: string | null;
   unitId?: string;
+  moduleId?: string;
 }
 
 export interface StudentCourseProgress {
@@ -664,3 +675,27 @@ export interface TeacherOption {
 }
 
 export const BATCH_LEVELS = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'] as const;
+
+/** A group of lessons inside a unit. Always starts with its video lesson. */
+export interface CourseModule {
+  id: string;
+  unitId: string;
+  order: number;
+  title: string;
+  titleIt: string;
+  description: string;
+  imageUrl?: string | null;
+  lessons: LessonSummary[];
+  totalLessons: number;
+  videoReady: boolean;
+  /** Test module (e.g. chapter test): no video lesson. */
+  isTest?: boolean;
+}
+
+export interface SaveModuleRequest {
+  title: string;
+  titleIt?: string;
+  description?: string;
+  imageUrl?: string | null;
+  isTest?: boolean;
+}

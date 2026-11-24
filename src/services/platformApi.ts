@@ -276,6 +276,15 @@ export const curriculumApi = {
     api.put<import('../types').LessonDetail>(`/api/curriculum/lessons/${lessonId}`, body),
   moveLesson: (lessonId: string, direction: -1 | 1) => api.post(`/api/curriculum/lessons/${lessonId}/move`, { direction }),
   deleteLesson: (lessonId: string) => api.delete(`/api/curriculum/lessons/${lessonId}`),
+
+  createModule: (unitId: string, body: import('../types').SaveModuleRequest) =>
+    api.post<import('../types').CourseModule>(`/api/curriculum/units/${unitId}/modules`, body),
+  updateModule: (moduleId: string, body: import('../types').SaveModuleRequest) =>
+    api.put<import('../types').CourseModule>(`/api/curriculum/modules/${moduleId}`, body),
+  moveModule: (moduleId: string, direction: -1 | 1) => api.post(`/api/curriculum/modules/${moduleId}/move`, { direction }),
+  deleteModule: (moduleId: string) => api.delete(`/api/curriculum/modules/${moduleId}`),
+  createLessonInModule: (moduleId: string, body: import('../types').SaveLessonRequest) =>
+    api.post<import('../types').LessonDetail>(`/api/curriculum/modules/${moduleId}/lessons`, body),
 };
 
 export const studentsApi = {

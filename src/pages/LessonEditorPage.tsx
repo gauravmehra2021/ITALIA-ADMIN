@@ -23,6 +23,7 @@ function toRequest(l: LessonDetail): SaveLessonRequest {
     exercises: l.exercises,
     homework: l.homework ?? '',
     unitId: l.unitId,
+    moduleId: l.moduleId ?? undefined,
   };
 }
 
@@ -192,6 +193,22 @@ export function LessonEditorPage() {
 
       {error && <div className="b-alert b-alert-error">{error}</div>}
 
+      {lesson.isModuleVideo && (
+        <div className={`b-alert ${draft.blocks.some((b) => b.type === 'Video' && b.mediaUrl) ? 'b-alert-success' : 'b-alert-info'}`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ flex: '1 1 320px' }}>
+              🎬 <strong>Module video{lesson.moduleTitle ? ` · ${lesson.moduleTitle}` : ''}.</strong>{' '}
+              {draft.blocks.some((b) => b.type === 'Video' && b.mediaUrl)
+                ? 'Students watch this video first, before the other lessons of the module.'
+                : 'Add the video when it is ready (upload it or paste a YouTube link). Until then students see “video coming soon” and continue with the lessons.'}
+            </span>
+            {!draft.blocks.some((b) => b.type === 'Video') && (
+              <button type="button" className="b-btn b-btn-sm b-btn-primary" onClick={() => addBlock('Video')}>＋ Add the video</button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="b-editor">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {/* Details */}
@@ -215,14 +232,23 @@ export function LessonEditorPage() {
               <div className="b-grid-4">
                 <div className="b-field">
                   <label className="b-label" htmlFor="l-kind">Type</label>
-                  <select id="l-kind" className="b-select" value={draft.kind} onChange={(e) => set({ kind: e.target.value as LessonKind })}>
+                  <select id="l-kind" className="b-select" value={draft.kind} disabled={lesson.isModuleVideo} onChange={(e) => set({ kind: e.target.value as LessonKind })}>
                     {(Object.keys(KIND_META) as LessonKind[]).map((k) => <option key={k} value={k}>{KIND_META[k].emoji} {KIND_META[k].label}</option>)}
                   </select>
                 </div>
                 <div className="b-field">
-                  <label className="b-label" htmlFor="l-unit">Unit</label>
-                  <select id="l-unit" className="b-select" value={draft.unitId} onChange={(e) => set({ unitId: e.target.value })}>
-                    {units.map((u) => <option key={u.id} value={u.id}>Unit {u.order}: {u.title}</option>)}
+                  <label className="b-label" htmlFor="l-module">Unit · module</label>
+                  <select id="l-module" className="b-select" value={draft.moduleId ?? ''} disabled={lesson.isModuleVideo}
+                    title={lesson.isModuleVideo ? 'The module video always stays first in its own module' : undefined}
+                    onChange={(e) => {
+                      const unit = units.find((u) => u.modules?.some((m) => m.id === e.target.value));
+                      set({ moduleId: e.target.value, unitId: unit?.id ?? draft.unitId });
+                    }}>
+                    {units.map((u) => (
+                      <optgroup key={u.id} label={`Unit ${u.order}: ${u.title}`}>
+                        {(u.modules ?? []).map((m) => <option key={m.id} value={m.id}>Module {m.order}: {m.title}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
                 <div className="b-field">

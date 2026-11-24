@@ -229,3 +229,34 @@
 .b-rp-you { border-left-color: var(--brand-green, #00894a); background: color-mix(in srgb, var(--green-100, #dcf5e8) 55%, var(--mist)); }
 .b-rp-alts { display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.3rem; }
 .b-rp-alt .b-input { min-height: 34px; font-size: 0.86rem; }
+
+/* Modules inside a unit */
+.b-module { border-bottom: 1px solid var(--card-border); }
+.b-module-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem 1.1rem;
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--card-border-subtle);
+}
+.b-module-num {
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-fg, #fff);
+  background: var(--primary);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+.b-module-title { font-weight: 800; color: var(--ink); font-size: 0.95rem; }
+.b-module .b-lesson { padding-left: 2rem; }
+.b-lesson-video { background: color-mix(in srgb, var(--gold) 7%, transparent); }
+.b-lesson-video .b-lesson-tools { opacity: 1; }
+.b-module .b-add-row { padding-left: 2rem; background: transparent; }
+@media (max-width: 760px) {
+  .b-module .b-lesson, .b-module .b-add-row { padding-left: 1.1rem; }
+}
