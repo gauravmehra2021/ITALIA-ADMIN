@@ -3,6 +3,7 @@ import { coursesApi } from '../../services/platformApi';
 import type { Course } from '../../types';
 import { MediaField } from './BuilderKit';
 
+const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const LEVEL_BY_CEFR: Record<string, string> = { A1: 'Beginner', A2: 'Beginner', B1: 'Intermediate', B2: 'Intermediate', C1: 'Advanced', C2: 'Advanced' };
 
 export const CATEGORIES = [
@@ -83,7 +84,8 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
         <div className="b-field">
           <label className="b-label" htmlFor="c-cefr">CEFR level</label>
           <select id="c-cefr" className="b-select" value={cefrLevel} onChange={(e) => setCefrLevel(e.target.value)}>
-            {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map((l) => <option key={l}>{l}</option>)}
+            {/* Built-in courses can have a level outside the list (e.g. "A0–A2"): keep it selectable. */}
+            {[...(CEFR_LEVELS.includes(cefrLevel) ? [] : [cefrLevel]), ...CEFR_LEVELS].map((l) => <option key={l}>{l}</option>)}
           </select>
         </div>
         <div className="b-field">
