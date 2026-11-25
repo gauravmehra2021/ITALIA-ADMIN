@@ -78,6 +78,22 @@ export async function apiRequest<T>(
   return payload!.data as T;
 }
 
+/**
+ * Opens a syllabus PDF in a new tab. PDFs are not public files: the API gives the team a link
+ * that works for a few minutes (students only see them inside the student app, without download).
+ */
+export async function openDocument(url: string) {
+  const tab = window.open('', '_blank');
+  try {
+    const res = await apiRequest<{ url: string }>('/api/documents/link', { method: 'POST', body: JSON.stringify({ url }) });
+    if (tab) tab.location.href = mediaUrl(res.url)!;
+    else window.location.href = mediaUrl(res.url)!;
+  } catch {
+    tab?.close();
+    window.alert('This document could not be opened.');
+  }
+}
+
 export const api = {
   get: <T>(path: string) => apiRequest<T>(path),
   post: <T>(path: string, body?: unknown) =>

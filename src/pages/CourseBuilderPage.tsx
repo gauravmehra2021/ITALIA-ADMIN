@@ -2,7 +2,7 @@ import { Icon } from '../components/Icons';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { coursesApi, curriculumApi } from '../services/platformApi';
-import { mediaUrl } from '../services/api';
+import { mediaUrl, openDocument } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { KIND_META, MediaField, Modal, StatusBadge } from '../components/builder/BuilderKit';
 import { CourseForm } from '../components/builder/CourseForm';
@@ -202,7 +202,7 @@ export function CourseBuilderPage() {
                 })}
                 <div className="b-add-row">
                   <button className="b-btn b-btn-sm b-btn-primary" onClick={() => setModuleModal({ unit: u })}><Icon.Plus size={15} /> Add module</button>
-                  {u.pdfUrl && <a className="b-btn b-btn-sm b-btn-ghost" href={mediaUrl(u.pdfUrl) ?? '#'} target="_blank" rel="noreferrer">📄 Study sheet</a>}
+                  {u.pdfUrl && <button type="button" className="b-btn b-btn-sm b-btn-ghost" onClick={() => void openDocument(u.pdfUrl!)}>📄 Study sheet</button>}
                 </div>
               </div>
             </article>
