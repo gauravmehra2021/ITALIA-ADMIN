@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icons';
 import { Alert, EmptyState, Modal, PageHeader, Person, Spinner, StatCard, formatDate, timeAgo } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
+import { batchTiming } from '../lib/status';
 import { batchesApi, studentsApi } from '../services/platformApi';
 import type { Batch, Student, StudentPasswordResult } from '../types';
 import './pages.css';
@@ -23,8 +24,26 @@ const LANGUAGES = [
 
 const NO_BATCH = 'none';
 
-type StatusFilter = 'all' | 'active' | 'suspended' | 'unverified';
+type Tab = 'all' | 'new' | 'payment' | 'active' | 'suspended';
 type SourceFilter = 'all' | 'signup' | 'team';
+
+const TABS: { id: Tab; label: string; hint: string }[] = [
+  { id: 'all', label: 'All', hint: '' },
+  { id: 'new', label: 'New (paid)', hint: 'Paid enquiries. Choose a batch and send the login.' },
+  { id: 'payment', label: 'Payment pending', hint: 'Signed up themselves but not in a batch, so no lessons open. Call them to take the payment.' },
+  { id: 'active', label: 'Active', hint: '' },
+  { id: 'suspended', label: 'Suspended', hint: '' },
+];
+
+/** Which tab a student belongs to. */
+function stageOf(s: Student): Exclude<Tab, 'all'> {
+  if (s.status === 'Suspended' || s.status === 'Disabled') return 'suspended';
+  if (s.awaitingLogin) return 'new';
+  if (!s.addedByStaff && batchIdsOf(s).length === 0) return 'payment';
+  return 'active';
+}
+
+const digits = (phone: string) => phone.replace(/[^\d]/g, '');
 
 function statusOf(s: Student): { label: string; tone: string } {
   if (s.isDeleted) return { label: 'Removed', tone: 'gray' };
@@ -38,15 +57,20 @@ interface FormState {
   lastName: string;
   email: string;
   phoneNumber: string;
-  batchId: string;
+  batchIds: string[];
   preferredLanguage: string;
 }
 
-const emptyForm = (batchId = ''): FormState => ({ firstName: '', lastName: '', email: '', phoneNumber: '', batchId, preferredLanguage: 'English' });
+const emptyForm = (batchId = ''): FormState => ({ firstName: '', lastName: '', email: '', phoneNumber: '', batchIds: batchId ? [batchId] : [], preferredLanguage: 'English' });
+
+/** Every batch of a student (older records only have batchId). */
+const batchIdsOf = (s: Student) => (s.batches?.length ? s.batches.map((b) => b.id) : s.batchId ? [s.batchId] : []);
 
 export function StudentsPage() {
-  const { hasRole } = useAuth();
-  const canManage = hasRole('SuperAdmin', 'Admin', 'Staff');
+  const { can } = useAuth();
+  const canManage = can('students', 'Full');
+  /** View access is enough to send the login of a paid student (Teachers). */
+  const canSendLogin = can('students', 'View');
   const [params, setParams] = useSearchParams();
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -57,11 +81,13 @@ export function StudentsPage() {
 
   const [search, setSearch] = useState('');
   const batchFilter = params.get('batch') ?? 'all';
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const tabParam = params.get('tab') as Tab | null;
+  const tab: Tab = tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : 'all';
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moveTo, setMoveTo] = useState('');
+  const [moveMode, setMoveMode] = useState<'add' | 'replace' | 'remove'>('add');
   const [moving, setMoving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -71,8 +97,12 @@ export function StudentsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [access, setAccess] = useState<Student | null>(null);
+  const [accessBatches, setAccessBatches] = useState<string[]>([]);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
   const [confirmReset, setConfirmReset] = useState<Student | null>(null);
-  const [passwordResult, setPasswordResult] = useState<{ result: StudentPasswordResult; isReset: boolean } | null>(null);
+  const [passwordResult, setPasswordResult] = useState<{ result: StudentPasswordResult; isReset: boolean; loginSent?: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function load() {
@@ -93,27 +123,27 @@ export function StudentsPage() {
   }, []);
 
   const current = useMemo(() => students.filter((s) => !s.isDeleted), [students]);
-  const withoutBatch = current.filter((s) => !s.batchId).length;
-  const newThisWeek = current.filter((s) => Date.now() - new Date(s.createdAtUtc).getTime() < 7 * 86400_000).length;
-  const tempPassword = current.filter((s) => s.mustChangePassword).length;
+  const withoutBatch = current.filter((s) => batchIdsOf(s).length === 0).length;
+  const tempPassword = current.filter((s) => s.mustChangePassword && !s.awaitingLogin).length;
+  const tabCounts = useMemo(() => {
+    const c: Record<Tab, number> = { all: current.length, new: 0, payment: 0, active: 0, suspended: 0 };
+    current.forEach((s) => c[stageOf(s)]++);
+    return c;
+  }, [current]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return current
-      .filter((s) => (batchFilter === 'all' ? true : batchFilter === NO_BATCH ? !s.batchId : s.batchId === batchFilter))
-      .filter((s) => {
-        const st = statusOf(s).label;
-        if (statusFilter === 'active') return st === 'Active';
-        if (statusFilter === 'suspended') return st === 'Suspended';
-        if (statusFilter === 'unverified') return st === 'Email not verified';
-        return true;
-      })
+      .filter((s) => (batchFilter === 'all' ? true : batchFilter === NO_BATCH ? batchIdsOf(s).length === 0 : batchIdsOf(s).includes(batchFilter)))
+      .filter((s) => tab === 'all' || stageOf(s) === tab)
       .filter((s) => (sourceFilter === 'all' ? true : sourceFilter === 'team' ? s.addedByStaff : !s.addedByStaff))
       .filter((s) => !q || s.fullName.toLowerCase().includes(q) || s.email.toLowerCase().includes(q) || (s.phoneNumber ?? '').replace(/\s/g, '').includes(q.replace(/\s/g, '')));
-  }, [current, search, batchFilter, statusFilter, sourceFilter]);
+  }, [current, search, batchFilter, tab, sourceFilter]);
 
-  const filtersOn = batchFilter !== 'all' || statusFilter !== 'all' || sourceFilter !== 'all' || search.trim() !== '';
-  const allVisibleSelected = visible.length > 0 && visible.every((s) => selected.has(s.id));
+  const filtersOn = batchFilter !== 'all' || sourceFilter !== 'all' || search.trim() !== '';
+  /** Students waiting for payment or their login can't be selected for bulk batch changes. */
+  const selectable = visible.filter((s) => stageOf(s) !== 'new' && stageOf(s) !== 'payment');
+  const allVisibleSelected = selectable.length > 0 && selectable.every((s) => selected.has(s.id));
 
   function setBatchFilter(value: string) {
     const next = new URLSearchParams(params);
@@ -122,11 +152,45 @@ export function StudentsPage() {
     setParams(next, { replace: true });
   }
 
+  function setTab(value: Tab) {
+    const next = new URLSearchParams(params);
+    if (value === 'all') next.delete('tab');
+    else next.set('tab', value);
+    setParams(next, { replace: true });
+  }
+
   function clearFilters() {
     setSearch('');
-    setStatusFilter('all');
     setSourceFilter('all');
     setBatchFilter('all');
+  }
+
+  function openAccess(s: Student) {
+    setAccess(s);
+    setAccessBatches(batchIdsOf(s));
+    setAccessError(null);
+  }
+
+  async function giveAccess() {
+    if (!access) return;
+    const s = access;
+    setBusyId(s.id);
+    setAccessError(null);
+    try {
+      const res = await studentsApi.giveAccess(s.id, accessBatches);
+      setAccess(null);
+      if (res.temporaryPassword) {
+        setPasswordResult({ result: { student: res.student, temporaryPassword: res.temporaryPassword }, isReset: false, loginSent: true });
+        setCopied(false);
+      } else {
+        setToast(`${s.fullName} now has access. They sign in with the password they chose when signing up.`);
+      }
+      await load();
+    } catch (e) {
+      setAccessError(e instanceof Error ? e.message : 'Could not give access.');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function toggle(id: string) {
@@ -142,10 +206,10 @@ export function StudentsPage() {
     setSelected((prev) => {
       if (allVisibleSelected) {
         const next = new Set(prev);
-        visible.forEach((s) => next.delete(s.id));
+        selectable.forEach((s) => next.delete(s.id));
         return next;
       }
-      return new Set([...prev, ...visible.map((s) => s.id)]);
+      return new Set([...prev, ...selectable.map((s) => s.id)]);
     });
   }
 
@@ -155,8 +219,15 @@ export function StudentsPage() {
     setError(null);
     try {
       const target = moveTo === NO_BATCH ? null : moveTo;
-      const res = await studentsApi.move([...selected], target);
-      setToast(target ? `${res.moved} student${res.moved === 1 ? '' : 's'} moved to ${res.batchName}. Their batch courses are open now.` : `${res.moved} student${res.moved === 1 ? '' : 's'} taken out of their batch.`);
+      const mode = target === null ? 'replace' : moveMode;
+      const res = await studentsApi.move([...selected], target, mode);
+      const n = `${res.moved} student${res.moved === 1 ? '' : 's'}`;
+      setToast(
+        target === null ? `${n} taken out of all their batches.`
+          : mode === 'add' ? `${n} added to ${res.batchName}. They keep their other batches.`
+            : mode === 'remove' ? `${n} removed from ${res.batchName}.`
+              : `${n} moved to ${res.batchName} (their only batch now). Their batch courses are open now.`,
+      );
       setSelected(new Set());
       setMoveTo('');
       await load();
@@ -181,7 +252,7 @@ export function StudentsPage() {
       lastName: s.lastName,
       email: s.email,
       phoneNumber: s.phoneNumber ?? '',
-      batchId: s.batchId ?? '',
+      batchIds: batchIdsOf(s),
       preferredLanguage: s.preferredLanguage,
     });
     setFormError(null);
@@ -197,7 +268,7 @@ export function StudentsPage() {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         phoneNumber: form.phoneNumber.trim() || undefined,
-        batchId: form.batchId || null,
+        batchIds: form.batchIds,
         preferredLanguage: form.preferredLanguage,
       };
       if (editing) {
@@ -282,13 +353,24 @@ export function StudentsPage() {
       {error && <Alert tone="error" onClose={() => setError(null)}>{error}</Alert>}
 
       <div className="stats">
-        <StatCard icon="Users" label="Students" value={current.length} tone="blue" />
-        <StatCard icon="Alert" label="Not in a batch yet" value={withoutBatch} tone={withoutBatch > 0 ? 'orange' : 'green'} hint={withoutBatch > 0 ? 'They can only open courses open to all' : 'Everyone is placed'} />
-        <StatCard icon="Trend" label="New this week" value={newThisWeek} tone="teal" />
-        <StatCard icon="Key" label="Using a temporary password" value={tempPassword} tone="purple" hint="Haven't signed in and changed it yet" />
+        <StatCard icon="Users" label="Students" value={current.length} tone="blue" hint={`${tabCounts.active} active`} />
+        <StatCard icon="Send" label="Paid · login not sent" value={tabCounts.new} tone="green" hint={tabCounts.new > 0 ? 'Send their login' : 'Nobody waiting'} />
+        <StatCard icon="Phone" label="Payment pending" value={tabCounts.payment} tone="orange" hint={tabCounts.payment > 0 ? 'Call them' : 'Nobody waiting'} />
+        <StatCard icon="Key" label="Temporary password" value={tempPassword} tone="purple" hint="Not changed yet" />
       </div>
 
       <section className="card">
+        <div className="card-head st-tabs">
+          <div className="chips" role="tablist" aria-label="Student stage">
+            {TABS.map((t) => (
+              <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`chip ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+                {t.label}
+                <span className="count">{tabCounts[t.id]}</span>
+              </button>
+            ))}
+          </div>
+          {TABS.find((t) => t.id === tab)?.hint && <p className="muted small st-tab-hint">{TABS.find((t) => t.id === tab)!.hint}</p>}
+        </div>
         <div className="card-head toolbar st-toolbar">
           <label className="search">
             <Icon.Search size={17} />
@@ -299,12 +381,6 @@ export function StudentsPage() {
               <option value="all">All batches</option>
               <option value={NO_BATCH}>Not in a batch ({withoutBatch})</option>
               {batches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.studentCount})</option>)}
-            </select>
-            <select className="select input-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} aria-label="Filter by status">
-              <option value="all">Any status</option>
-              <option value="active">Active</option>
-              <option value="unverified">Email not verified</option>
-              <option value="suspended">Suspended</option>
             </select>
             <select className="select input-sm" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as SourceFilter)} aria-label="Filter by how they joined">
               <option value="all">Signed up + added by team</option>
@@ -318,13 +394,18 @@ export function StudentsPage() {
         {canManage && selected.size > 0 && (
           <div className="st-bulk" role="region" aria-label="Selected students">
             <strong>{selected.size} selected</strong>
-            <select className="select input-sm" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="Move to batch">
-              <option value="">Move to batch…</option>
-              {batches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              <option value={NO_BATCH}>— Take out of batch —</option>
+            <select className="select input-sm" value={moveMode} onChange={(e) => setMoveMode(e.target.value as typeof moveMode)} aria-label="What to do" disabled={moveTo === NO_BATCH}>
+              <option value="add">Add to batch (keep other batches)</option>
+              <option value="replace">Move to batch (only this batch)</option>
+              <option value="remove">Remove from batch</option>
+            </select>
+            <select className="select input-sm" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="Batch">
+              <option value="">Choose batch…</option>
+              {batches.map((b) => <option key={b.id} value={b.id}>{b.name}{batchTiming(b) ? ` · ${batchTiming(b)}` : ''}</option>)}
+              <option value={NO_BATCH}>— Take out of all batches —</option>
             </select>
             <button type="button" className="btn btn-primary btn-sm" disabled={!moveTo || moving} onClick={() => void moveSelected()}>
-              {moving ? 'Moving…' : 'Move'}
+              {moving ? 'Saving…' : moveTo === NO_BATCH ? 'Take out' : moveMode === 'add' ? 'Add' : moveMode === 'remove' ? 'Remove' : 'Move'}
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Cancel</button>
           </div>
@@ -333,10 +414,11 @@ export function StudentsPage() {
         {visible.length === 0 ? (
           <EmptyState
             icon="Users"
-            title={current.length === 0 ? 'No students yet' : 'No students match these filters'}
+            title={current.length === 0 ? 'No students yet' : tab === 'new' && !filtersOn ? 'Nobody waiting for a login' : tab === 'payment' && !filtersOn ? 'No pending payments' : 'No students match these filters'}
             text={current.length === 0
               ? (canManage ? 'Students appear here when they sign up, or use “Add student”.' : 'When an Admin places students in your batch, they appear here.')
-              : undefined}
+              : tab === 'new' && !filtersOn ? 'When an enquiry is marked Paid in Admissions & Leads, the student appears here.'
+                : undefined}
             action={filtersOn ? <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}>Clear filters</button> : undefined}
           />
         ) : (
@@ -346,7 +428,7 @@ export function StudentsPage() {
                 <tr>
                   {canManage && (
                     <th className="st-check">
-                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} aria-label="Select all shown students" />
+                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} disabled={selectable.length === 0} aria-label="Select all shown students" />
                     </th>
                   )}
                   <th>Student</th>
@@ -354,18 +436,22 @@ export function StudentsPage() {
                   <th>Courses</th>
                   <th>Joined</th>
                   <th>Status</th>
-                  {canManage && <th className="actions">Actions</th>}
+                  {(canManage || canSendLogin) && <th className="actions">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {visible.map((s) => {
                   const st = statusOf(s);
+                  const stage = stageOf(s);
                   const busy = busyId === s.id;
+                  // Waiting for payment / login: only "Mark paid" or "Send login" may give a batch.
+                  const locked = stage === 'new' || stage === 'payment';
+                  const lockedWhy = stage === 'new' ? 'Send the login first' : 'Mark as paid first';
                   return (
                     <tr key={s.id} className={selected.has(s.id) ? 'is-selected' : ''}>
                       {canManage && (
                         <td className="st-check">
-                          <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} aria-label={`Select ${s.fullName}`} />
+                          <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} disabled={locked} title={locked ? lockedWhy : undefined} aria-label={`Select ${s.fullName}`} />
                         </td>
                       )}
                       <td data-label="Student">
@@ -373,10 +459,17 @@ export function StudentsPage() {
                         {s.phoneNumber && <span className="st-phone"><Icon.Phone size={12} /> {s.phoneNumber}</span>}
                       </td>
                       <td data-label="Batch">
-                        {s.batchId ? (
-                          <button type="button" className="link-btn" onClick={() => setBatchFilter(s.batchId!)}>
-                            <span className="badge badge-blue">{s.batchName ?? batchName(s.batchId) ?? 'Batch'}</span>
-                          </button>
+                        {batchIdsOf(s).length > 0 ? (
+                          <span className="st-batches">
+                            {batchIdsOf(s).map((id) => {
+                              const b = s.batches?.find((x) => x.id === id) ?? batches.find((x) => x.id === id);
+                              return (
+                                <button key={id} type="button" className="link-btn" onClick={() => setBatchFilter(id)} title={batchTiming(b) ? `Class time ${batchTiming(b)}` : undefined}>
+                                  <span className="badge badge-blue">{b?.name ?? batchName(id) ?? 'Batch'}</span>
+                                </button>
+                              );
+                            })}
+                          </span>
                         ) : (
                           <span className="badge badge-orange">No batch</span>
                         )}
@@ -396,20 +489,52 @@ export function StudentsPage() {
                       </td>
                       <td data-label="Status">
                         <span className="st-status">
-                          <span className={`badge badge-dot badge-${st.tone}`}>{st.label}</span>
-                          {s.mustChangePassword && <span className="badge badge-purple st-temp" title="Still using the temporary password from the email"><Icon.Key size={12} /> Temp password</span>}
+                          {stage === 'new' ? (
+                            <span className="badge badge-dot badge-green" title="Paid enquiry. No login sent yet.">Paid · login not sent</span>
+                          ) : stage === 'payment' ? (
+                            <span className="badge badge-dot badge-orange" title="Signed up but not in a batch, so no lessons open">Payment pending</span>
+                          ) : (
+                            <span className={`badge badge-dot badge-${st.tone}`}>{st.label}</span>
+                          )}
+                          {s.mustChangePassword && !s.awaitingLogin && <span className="badge badge-purple st-temp" title="Still using the temporary password from the email"><Icon.Key size={12} /> Temp password</span>}
                         </span>
                       </td>
+                      {!canManage && canSendLogin && (
+                        <td className="actions">
+                          {stage === 'new' && (
+                            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => openAccess(s)}>
+                              <Icon.Send size={15} /> Send login
+                            </button>
+                          )}
+                        </td>
+                      )}
                       {canManage && (
                         <td className="actions">
                           <div className="row-end">
-                            <button type="button" className="icon-btn sm" disabled={busy} onClick={() => openEdit(s)} title="Edit / change batch" aria-label={`Edit ${s.fullName}`}>
+                            {stage === 'new' && (
+                              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => openAccess(s)} title={s.addedByStaff ? 'Choose a batch and email the one-time password' : 'Choose a batch to open their lessons'}>
+                                <Icon.Send size={15} /> {s.addedByStaff ? 'Send login' : 'Give access'}
+                              </button>
+                            )}
+                            {stage === 'payment' && (
+                              <>
+                                {s.phoneNumber && (
+                                  <a className="icon-btn sm" href={`https://wa.me/${digits(s.phoneNumber)}`} target="_blank" rel="noreferrer" title="WhatsApp" aria-label={`WhatsApp ${s.fullName}`}>
+                                    <Icon.WhatsApp size={15} />
+                                  </a>
+                                )}
+                                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => openAccess(s)} title="Payment received: choose a batch to open their lessons">
+                                  <Icon.CheckCircle size={15} /> Mark paid
+                                </button>
+                              </>
+                            )}
+                            <button type="button" className="icon-btn sm" disabled={busy || locked} onClick={() => openEdit(s)} title={locked ? lockedWhy : "Edit / change batch"} aria-label={`Edit ${s.fullName}`}>
                               <Icon.Edit size={15} />
                             </button>
-                            <button type="button" className="icon-btn sm" disabled={busy} onClick={() => setConfirmReset(s)} title="Email a new temporary password" aria-label={`Reset password for ${s.fullName}`}>
+                            <button type="button" className="icon-btn sm" disabled={busy || locked} onClick={() => setConfirmReset(s)} title={locked ? lockedWhy : "Email a new temporary password"} aria-label={`Reset password for ${s.fullName}`}>
                               <Icon.Key size={15} />
                             </button>
-                            <button type="button" className={`icon-btn sm ${st.label === 'Suspended' ? '' : 'danger'}`} disabled={busy} onClick={() => void toggleStatus(s)} title={st.label === 'Suspended' ? 'Activate' : 'Suspend (cannot sign in)'} aria-label={`${st.label === 'Suspended' ? 'Activate' : 'Suspend'} ${s.fullName}`}>
+                            <button type="button" className={`icon-btn sm ${st.label === 'Suspended' ? '' : 'danger'}`} disabled={busy || locked} onClick={() => void toggleStatus(s)} title={locked ? lockedWhy : st.label === 'Suspended' ? 'Activate' : 'Suspend (cannot sign in)'} aria-label={`${st.label === 'Suspended' ? 'Activate' : 'Suspend'} ${s.fullName}`}>
                               {st.label === 'Suspended' ? <Icon.CheckCircle size={15} /> : <Icon.Pause size={15} />}
                             </button>
                           </div>
@@ -435,7 +560,7 @@ export function StudentsPage() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         title={editing ? `Edit ${editing.fullName}` : 'Add a student'}
-        subtitle={editing ? 'Changing the batch opens the new batch’s courses and closes the old ones. Progress is kept.' : 'We email the student their login details with a temporary password. They choose their own password at first sign-in.'}
+        subtitle={editing ? 'Changing batches opens the courses of the chosen batches and closes the others. Progress is kept.' : 'We email the student their login details with a temporary password. They choose their own password at first sign-in.'}
         footer={
           <>
             <button type="button" className="btn btn-ghost" onClick={() => setFormOpen(false)} disabled={saving}>Cancel</button>
@@ -475,18 +600,82 @@ export function StudentsPage() {
             </div>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label htmlFor="s-batch">Batch</label>
-            <select id="s-batch" className="select" value={form.batchId} onChange={(e) => setForm({ ...form, batchId: e.target.value })}>
-              <option value="">Not in a batch yet</option>
-              {batches.map((b) => <option key={b.id} value={b.id}>{b.name} · {b.level} · {b.courses.length} course{b.courses.length === 1 ? '' : 's'}</option>)}
-            </select>
+            <span className="label" id="s-batches-label">Batches <span className="muted">(choose one or more — e.g. a morning and an evening batch)</span></span>
+            {batches.length === 0 ? (
+              <span className="hint">No batches yet. <Link to="/app/batches">Create a batch</Link> first.</span>
+            ) : (
+              <div className="st-batch-pick" role="group" aria-labelledby="s-batches-label">
+                {batches.map((b) => {
+                  const on = form.batchIds.includes(b.id);
+                  return (
+                    <label key={b.id} className={`st-batch-option ${on ? 'active' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => setForm({ ...form, batchIds: on ? form.batchIds.filter((x) => x !== b.id) : [...form.batchIds, b.id] })}
+                      />
+                      <span>
+                        <strong>{b.name}</strong>
+                        <small>
+                          {[batchTiming(b), `${b.courses.length} course${b.courses.length === 1 ? '' : 's'}`, b.mentorName].filter(Boolean).join(' · ')}
+                        </small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
             <span className="hint">
-              {form.batchId
-                ? <>Opens: {batches.find((b) => b.id === form.batchId)?.courses.map((c) => c.title).join(', ') || 'no courses assigned to this batch yet'}</>
-                : 'Without a batch the student only sees courses marked “open to every student”.'}
+              {form.batchIds.length > 0
+                ? <>Opens: {[...new Set(batches.filter((b) => form.batchIds.includes(b.id)).flatMap((b) => b.courses.map((c) => c.title)))].join(', ') || 'no courses assigned to these batches yet'}. They see the live classes of every chosen batch.</>
+                : 'Without a batch the student only sees courses marked “open to every student” and no live classes.'}
             </span>
           </div>
         </form>
+      </Modal>
+
+      {/* ── Give access to a paid student ── */}
+      <Modal
+        open={!!access}
+        onClose={() => setAccess(null)}
+        title={access?.addedByStaff ? `Send login to ${access.fullName}` : `Give access to ${access?.fullName ?? ''}`}
+        subtitle={access?.addedByStaff
+          ? 'Choose their batch. We email a one-time password; they choose their own password at first sign-in.'
+          : 'Choose their batch. Its lessons open straight away. They keep the password they chose when signing up.'}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setAccess(null)} disabled={busyId === access?.id}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={() => void giveAccess()} disabled={busyId === access?.id || accessBatches.length === 0}>
+              {busyId === access?.id ? 'Saving…' : access?.addedByStaff ? <><Icon.Send size={16} /> Save & email login</> : <><Icon.CheckCircle size={16} /> Give access</>}
+            </button>
+          </>
+        }
+      >
+        {access && (
+          <div className="field" style={{ marginBottom: 0 }}>
+            {accessError && <div style={{ marginBottom: 14 }}><Alert tone="error">{accessError}</Alert></div>}
+            <Person name={access.fullName} sub={[access.email, access.phoneNumber].filter(Boolean).join(' · ')} />
+            <span className="label" id="access-batches-label" style={{ marginTop: 16 }}>Batch</span>
+            {batches.length === 0 ? (
+              <span className="hint">{canManage ? <>No batches yet. <Link to="/app/batches">Create a batch</Link> first.</> : 'You don’t lead any batch yet. Ask an Admin to make you the teacher of a batch.'}</span>
+            ) : (
+              <div className="st-batch-pick" role="group" aria-labelledby="access-batches-label">
+                {batches.map((b) => {
+                  const on = accessBatches.includes(b.id);
+                  return (
+                    <label key={b.id} className={`st-batch-option ${on ? 'active' : ''}`}>
+                      <input type="checkbox" checked={on} onChange={() => setAccessBatches(on ? accessBatches.filter((x) => x !== b.id) : [...accessBatches, b.id])} />
+                      <span>
+                        <strong>{b.name}</strong>
+                        <small>{[batchTiming(b), `${b.courses.length} course${b.courses.length === 1 ? '' : 's'}`, b.mentorName].filter(Boolean).join(' · ')}</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* ── Confirm password reset ── */}
@@ -509,13 +698,13 @@ export function StudentsPage() {
       <Modal
         open={!!passwordResult}
         onClose={() => setPasswordResult(null)}
-        title={passwordResult?.isReset ? 'New password sent' : 'Student added'}
+        title={passwordResult?.isReset ? 'New password sent' : passwordResult?.loginSent ? 'Login sent' : 'Student added'}
         subtitle={passwordResult ? `We emailed the login details to ${passwordResult.result.student.email}.` : undefined}
         footer={<button type="button" className="btn btn-primary" onClick={() => setPasswordResult(null)}>Done</button>}
       >
         {passwordResult && (
           <div className="st-login">
-            <Person name={passwordResult.result.student.fullName} sub={passwordResult.result.student.batchName ? `Batch: ${passwordResult.result.student.batchName}` : 'Not in a batch yet'} size="lg" />
+            <Person name={passwordResult.result.student.fullName} sub={passwordResult.result.student.batches?.length ? `Batch: ${passwordResult.result.student.batches.map((b) => b.name).join(', ')}` : passwordResult.result.student.batchName ? `Batch: ${passwordResult.result.student.batchName}` : 'Not in a batch yet'} size="lg" />
             <dl className="st-creds">
               <dt>Email</dt>
               <dd>{passwordResult.result.student.email}</dd>

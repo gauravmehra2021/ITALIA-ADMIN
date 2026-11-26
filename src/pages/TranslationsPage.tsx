@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icons';
 import { Alert, EmptyState, PageHeader, Spinner, StatCard } from '../components/ui';
+import { useAuth } from '../hooks/useAuth';
 import { coursesApi, translationsApi } from '../services/platformApi';
 import type { Course, TranslationItem, TranslationPage } from '../types';
 import './translations.css';
@@ -157,6 +158,7 @@ type Values = Record<LangKey, string>;
 const valuesOf = (item: TranslationItem): Values => ({ punjabi: item.punjabi ?? '', hindi: item.hindi ?? '', urdu: item.urdu ?? '' });
 
 function Row({ item, onSaved, onError }: { item: TranslationItem; onSaved: (item: TranslationItem, before: TranslationItem) => void; onError: (m: string) => void }) {
+  const canEdit = useAuth().can('translations', 'Full');
   const [values, setValues] = useState<Values>(() => valuesOf(item));
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saved = useRef(item);
@@ -210,7 +212,7 @@ function Row({ item, onSaved, onError }: { item: TranslationItem; onSaved: (item
         {state === 'saved' ? (
           <span className="tr-saved"><Icon.Check size={16} /> Saved</span>
         ) : (
-          <button className="btn btn-sm btn-primary" disabled={!dirty || state === 'saving'} onClick={() => void save()}>
+          <button className="btn btn-sm btn-primary" disabled={!canEdit || !dirty || state === 'saving'} title={canEdit ? undefined : 'View only'} onClick={() => void save()}>
             {state === 'saving' ? 'Saving…' : 'Save'}
           </button>
         )}

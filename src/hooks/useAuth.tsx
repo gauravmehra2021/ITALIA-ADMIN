@@ -9,7 +9,17 @@ import {
 } from 'react';
 import { SESSION_EXPIRED_EVENT, SESSION_EXPIRED_FLAG } from '../services/api';
 import { authApi } from '../services/platformApi';
-import { PANEL_ROLES, type AuthResponse, type User, type UserRole } from '../types';
+import {
+  ACCESS_RANK,
+  PANEL_ROLES,
+  ROLE_DEFAULT_PERMISSIONS,
+  type AccessLevel,
+  type AuthResponse,
+  type PermissionMap,
+  type PermissionModule,
+  type User,
+  type UserRole,
+} from '../types';
 
 interface AuthState {
   user: User | null;
@@ -20,6 +30,10 @@ interface AuthState {
   verifyOtp: (userId: string, code: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   hasRole: (...roles: UserRole[]) => boolean;
+  /** Can the signed-in member use this module at this level? The Super Admin always can. */
+  can: (module: PermissionModule, level?: Exclude<AccessLevel, 'None'>) => boolean;
+  /** Re-reads the account from the server (role, status, permissions). */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -146,9 +160,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const can = useCallback(
+    (module: PermissionModule, level: Exclude<AccessLevel, 'None'> = 'View') => {
+      if (!user) return false;
+      if (user.role === 'SuperAdmin') return true;
+      const fallback = (ROLE_DEFAULT_PERMISSIONS as Partial<Record<UserRole, PermissionMap>>)[user.role]?.[module] ?? 'None';
+      const have = user.permissions ? (user.permissions[module] ?? 'None') : fallback;
+      return ACCESS_RANK[have] >= ACCESS_RANK[level];
+    },
+    [user],
+  );
+
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const fresh = await authApi.me();
+      setUser(fresh);
+      try {
+        localStorage.setItem('sseuropa_user', JSON.stringify(fresh));
+      } catch {
+        /* ignore */
+      }
+    } catch {
+      // A 401 already signs out through SESSION_EXPIRED_EVENT; network errors keep the saved account.
+    }
+  }, [token]);
+
+  // Permissions can change while someone is signed in: refresh on start and whenever the tab is focused again.
+  useEffect(() => {
+    if (!token) return;
+    void refreshUser();
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') void refreshUser();
+    };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, [token, refreshUser]);
+
   const value = useMemo(
-    () => ({ user, token, isDemo, loading, loginWithPassword, verifyOtp, logout, hasRole }),
-    [user, token, isDemo, loading, loginWithPassword, verifyOtp, logout, hasRole],
+    () => ({ user, token, isDemo, loading, loginWithPassword, verifyOtp, logout, hasRole, can, refreshUser }),
+    [user, token, isDemo, loading, loginWithPassword, verifyOtp, logout, hasRole, can, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

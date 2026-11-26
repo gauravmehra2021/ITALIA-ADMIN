@@ -1,7 +1,7 @@
 export type UserRole = 'User' | 'Mentor' | 'Admin' | 'SuperAdmin' | 'Staff';
 export type CourseLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export type CourseStatus = 'Draft' | 'Published' | 'Archived';
-export type EnquiryStatus = 'New' | 'Contacted' | 'Qualified' | 'Enrolled' | 'Closed';
+export type EnquiryStatus = 'New' | 'Contacted' | 'Qualified' | 'Enrolled' | 'Paid' | 'Closed';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -30,6 +30,13 @@ export interface User {
   emailVerified: boolean;
   isDeleted?: boolean;
   isProtectedSuperAdmin?: boolean;
+  phoneNumber?: string | null;
+  lastLoginAtUtc?: string | null;
+  createdAtUtc?: string | null;
+  mustChangePassword?: boolean;
+  /** Team members: what they can do in each admin module (already capped by their role). */
+  permissions?: Partial<Record<PermissionModule, AccessLevel>> | null;
+  hasCustomPermissions?: boolean;
 }
 
 export interface AuthResponse {
@@ -124,6 +131,10 @@ export interface ClassSession {
   status: string | number;
   meetingUrl?: string | null;
   meetingProvider?: string | null;
+  /** The batch this class is for (older classes have none and go to the course's students). */
+  batchId?: string | null;
+  batchName?: string | null;
+  batchStudentCount?: number;
 }
 
 export interface Material {
@@ -641,11 +652,22 @@ export interface Student {
   activeCourses: number;
   progressPercent: number;
   isDeleted: boolean;
+  /** Every batch of the student (a student can be in several, e.g. morning and evening). */
+  batches?: StudentBatch[] | null;
+  /** Paid enquiry turned into an account; nobody has given access (batch + login) yet. */
+  awaitingLogin?: boolean;
 }
 
 export interface StudentPasswordResult {
   student: Student;
   temporaryPassword: string;
+}
+
+export interface StudentBatch {
+  id: string;
+  name: string;
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
 export interface BatchCourse {
@@ -658,13 +680,17 @@ export interface BatchCourse {
 export interface Batch {
   id: string;
   name: string;
-  level: string;
+  /** No longer used in the panel (kept for older batches). */
+  level?: string;
   description: string;
   mentorId?: string | null;
   mentorName?: string | null;
   courses: BatchCourse[];
   startDateUtc?: string | null;
   studentCount: number;
+  /** Usual class time, "HH:mm" 24-hour. */
+  startTime?: string | null;
+  endTime?: string | null;
   createdAtUtc: string;
 }
 
@@ -674,7 +700,6 @@ export interface TeacherOption {
   role: UserRole;
 }
 
-export const BATCH_LEVELS = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'] as const;
 
 /** A group of lessons inside a unit. Always starts with its video lesson. */
 export interface CourseModule {
@@ -699,3 +724,40 @@ export interface SaveModuleRequest {
   imageUrl?: string | null;
   isTest?: boolean;
 }
+
+// ── Team permissions ─────────────────────────────────────────────────────────
+// The role sets the most a member may have; the Super Admin can lower any module per person.
+
+export type AccessLevel = 'None' | 'View' | 'Full';
+export type PermissionModule = 'enquiries' | 'students' | 'batches' | 'courses' | 'translations' | 'classes' | 'notifications';
+
+export const ACCESS_RANK: Record<AccessLevel, number> = { None: 0, View: 1, Full: 2 };
+
+export const PERMISSION_MODULES: { key: PermissionModule; label: string; icon: string; view: string; full: string }[] = [
+  { key: 'enquiries', label: 'Admissions & Leads', icon: 'Inbox', view: 'See website enquiries', full: 'Update enquiry status' },
+  { key: 'students', label: 'Students', icon: 'Users', view: 'See the student list', full: 'Add, edit, move, suspend and reset passwords' },
+  { key: 'batches', label: 'Batches', icon: 'Layers', view: 'See batches', full: 'Create, edit and delete batches' },
+  { key: 'courses', label: 'Courses & Content', icon: 'Book', view: 'Open courses and lessons', full: 'Build, edit and publish content' },
+  { key: 'translations', label: 'Translations', icon: 'Globe', view: 'See translations', full: 'Edit Punjabi, Hindi and Urdu text' },
+  { key: 'classes', label: 'Live Classes', icon: 'Video', view: 'See the class timetable', full: 'Schedule classes and send start alerts' },
+  { key: 'notifications', label: 'Notifications', icon: 'Bell', view: 'Read own notifications', full: 'Send notifications to students' },
+];
+
+export type PermissionMap = Record<PermissionModule, AccessLevel>;
+
+export interface TeamPermissionCatalog {
+  modules: PermissionModule[];
+  roleDefaults: Record<TeamRole, PermissionMap>;
+}
+
+export interface TeamPasswordResult {
+  user: User;
+  temporaryPassword: string;
+}
+
+/** Each role's starting access (same as the server) — used until the server's own answer arrives. */
+export const ROLE_DEFAULT_PERMISSIONS: Record<TeamRole, PermissionMap> = {
+  Admin: { enquiries: 'Full', students: 'Full', batches: 'Full', courses: 'Full', translations: 'Full', classes: 'Full', notifications: 'Full' },
+  Staff: { enquiries: 'Full', students: 'Full', batches: 'View', courses: 'None', translations: 'None', classes: 'None', notifications: 'None' },
+  Mentor: { enquiries: 'None', students: 'View', batches: 'View', courses: 'Full', translations: 'Full', classes: 'Full', notifications: 'Full' },
+};

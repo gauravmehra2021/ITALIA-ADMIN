@@ -302,3 +302,16 @@ button.role-card:hover { transform: translateY(-2px); box-shadow: var(--shadow);
   .lead-contact { grid-template-columns: 1fr 1fr 1fr; }
   .lead-contact .btn { font-size: 0.8rem; gap: 5px; }
 }
+
+/* Live classes: the batch a class is for, and cancelled classes */
+.class-meta .class-batch { color: var(--accent); font-weight: 600; }
+.class-row.is-dim { opacity: 0.55; }
+
+/* Audit log: period picker + per-entry delete */
+.audit-period { border-bottom: 1px solid var(--line); }
+.audit-period-picks { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); }
+.audit-period-picks .select { width: auto; min-width: 120px; }
+.event-end { display: inline-flex; align-items: flex-start; gap: 4px; }
+.event-delete { min-height: 30px; padding: 0 8px; margin-top: 2px; opacity: 0.35; }
+.event:hover .event-delete, .event-delete:focus-visible { opacity: 1; }
+@media (hover: none) { .event-delete { opacity: 0.8; } }

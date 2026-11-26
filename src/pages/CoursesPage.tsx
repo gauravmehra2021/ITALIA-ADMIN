@@ -17,8 +17,8 @@ type Filter = 'All' | 'Published' | 'Draft';
 
 export function CoursesPage() {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
-  const canCreate = hasRole('Admin', 'SuperAdmin', 'Mentor');
+  const { can } = useAuth();
+  const canCreate = can('courses', 'Full');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

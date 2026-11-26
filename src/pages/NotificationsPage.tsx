@@ -42,7 +42,8 @@ function friendlyTarget(desc: string) {
 }
 
 export function NotificationsPage() {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, can } = useAuth();
+  const canSend = can('notifications', 'Full');
   const isSuperAdmin = hasRole('SuperAdmin');
   const isAdmin = hasRole('Admin');
 
@@ -210,7 +211,7 @@ export function NotificationsPage() {
             </div>
           </div>
           <div className="card-foot row-end">
-            <button className="btn btn-primary" type="submit" disabled={sending || (audience === 'person' && !personId)}>
+            <button className="btn btn-primary" type="submit" disabled={!canSend || sending || (audience === 'person' && !personId)} title={canSend ? undefined : 'View only'}>
               <Icon.Send size={17} /> {sending ? 'Sending…' : 'Send notification'}
             </button>
           </div>

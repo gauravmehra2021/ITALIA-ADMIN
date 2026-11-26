@@ -12,13 +12,13 @@ import { LoginPage } from '../pages/LoginPage';
 import { AdminPage, CertificatesPage } from '../pages/MiscPages';
 import { AuditPage } from '../pages/AuditPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
-import { UsersPage } from '../pages/UsersPage';
+import { TeamPage } from '../pages/TeamPage';
 import { StudentsPage } from '../pages/StudentsPage';
 import { BatchesPage } from '../pages/BatchesPage';
 import { ProgressPage } from '../pages/ProgressPage';
 import { TranslationsPage } from '../pages/TranslationsPage';
 import type { ReactNode } from 'react';
-import { PANEL_ROLES, type UserRole } from '../types';
+import { PANEL_ROLES, type PermissionModule, type UserRole } from '../types';
 
 /** Signed in AND one of the four panel roles. Students never get into the admin panel. */
 function Protected({ children }: { children: ReactNode }) {
@@ -27,9 +27,9 @@ function Protected({ children }: { children: ReactNode }) {
   return children;
 }
 
-function RoleGate({ roles, children }: { roles: UserRole[]; children: ReactNode }) {
-  const { hasRole } = useAuth();
-  if (!hasRole(...roles)) return <Navigate to="/app" replace />;
+function RoleGate({ roles, module, children }: { roles: UserRole[]; module?: PermissionModule; children: ReactNode }) {
+  const { hasRole, can } = useAuth();
+  if (!hasRole(...roles) || (module && !can(module))) return <Navigate to="/app" replace />;
   return children;
 }
 
@@ -50,7 +50,7 @@ export function AppRouter() {
         <Route
           path="enquiries"
           element={
-            <RoleGate roles={['Staff', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="enquiries">
               <EnquiriesPage />
             </RoleGate>
           }
@@ -58,7 +58,7 @@ export function AppRouter() {
         <Route
           path="students"
           element={
-            <RoleGate roles={['SuperAdmin', 'Admin', 'Staff', 'Mentor']}>
+            <RoleGate roles={PANEL_ROLES} module="students">
               <StudentsPage />
             </RoleGate>
           }
@@ -66,7 +66,7 @@ export function AppRouter() {
         <Route
           path="batches"
           element={
-            <RoleGate roles={['SuperAdmin', 'Admin', 'Staff', 'Mentor']}>
+            <RoleGate roles={PANEL_ROLES} module="batches">
               <BatchesPage />
             </RoleGate>
           }
@@ -74,7 +74,7 @@ export function AppRouter() {
         <Route
           path="courses"
           element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="courses">
               <CoursesPage />
             </RoleGate>
           }
@@ -82,7 +82,7 @@ export function AppRouter() {
         <Route
           path="courses/:id"
           element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="courses">
               <CourseBuilderPage />
             </RoleGate>
           }
@@ -90,7 +90,7 @@ export function AppRouter() {
         <Route
           path="courses/:id/lessons/:lessonId"
           element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="courses">
               <LessonEditorPage />
             </RoleGate>
           }
@@ -98,7 +98,7 @@ export function AppRouter() {
         <Route
           path="translations"
           element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="translations">
               <TranslationsPage />
             </RoleGate>
           }
@@ -106,7 +106,7 @@ export function AppRouter() {
         <Route
           path="classes"
           element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="classes">
               <ClassesPage />
             </RoleGate>
           }
@@ -116,7 +116,7 @@ export function AppRouter() {
         <Route
           path="notifications"
           element={
-            <RoleGate roles={['Mentor', 'Admin', 'SuperAdmin']}>
+            <RoleGate roles={PANEL_ROLES} module="notifications">
               <NotificationsPage />
             </RoleGate>
           }
@@ -130,10 +130,10 @@ export function AppRouter() {
           }
         />
         <Route
-          path="users"
+          path="team"
           element={
             <RoleGate roles={['SuperAdmin']}>
-              <UsersPage />
+              <TeamPage />
             </RoleGate>
           }
         />
@@ -145,6 +145,7 @@ export function AppRouter() {
             </RoleGate>
           }
         />
+        <Route path="users" element={<Navigate to="/app/team" replace />} />
         <Route path="ai" element={<AiPage />} />
         <Route path="certificates" element={<CertificatesPage />} />
         <Route path="progress" element={<ProgressPage />} />

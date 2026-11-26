@@ -31,13 +31,13 @@ function greeting() {
 }
 
 export function DashboardPage() {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, can } = useAuth();
   const isSuperAdmin = hasRole('SuperAdmin');
   const isAdmin = hasRole('Admin');
   const isStaff = hasRole('Staff');
   const isTeacher = hasRole('Mentor');
-  const canLeads = isSuperAdmin || isAdmin || isStaff;
-  const canTeach = isSuperAdmin || isAdmin || isTeacher;
+  const canLeads = can('enquiries');
+  const canTeach = can('courses') || can('classes');
 
   const [superAdmin, setSuperAdmin] = useState<SuperAdminDashboard | null>(null);
   const [admin, setAdmin] = useState<AdminDashboard | null>(null);
@@ -117,7 +117,7 @@ export function DashboardPage() {
         </div>
         <div className="page-actions">
           {isSuperAdmin && (
-            <Link to="/app/users" className="btn btn-primary"><Icon.UserPlus size={18} /> Add team member</Link>
+            <Link to="/app/team" className="btn btn-primary"><Icon.UserPlus size={18} /> Add team member</Link>
           )}
           {isAdmin && (
             <Link to="/app/courses" className="btn btn-primary"><Icon.Book size={18} /> Manage courses</Link>
@@ -147,7 +147,7 @@ export function DashboardPage() {
           <StatCard icon="Inbox" tone="blue" label="All enquiries" value={staff.totalEnquiries} />
           <StatCard icon="Sparkles" tone="orange" label="New — call first" value={staff.newEnquiries} />
           <StatCard icon="Phone" tone="purple" label="In follow-up" value={staff.inFollowUpEnquiries} />
-          <StatCard icon="CheckCircle" tone="green" label="Enrolled" value={staff.enrolledEnquiries} hint={staff.totalEnquiries ? `${Math.round((staff.enrolledEnquiries / staff.totalEnquiries) * 100)}% conversion` : undefined} />
+          <StatCard icon="CheckCircle" tone="green" label="Enrolled / Paid" value={staff.enrolledEnquiries} hint={staff.totalEnquiries ? `${Math.round((staff.enrolledEnquiries / staff.totalEnquiries) * 100)}% conversion` : undefined} />
         </div>
       )}
       {teacher && (
@@ -262,7 +262,7 @@ export function DashboardPage() {
 
           {/* ── Super Admin: team ── */}
           {superAdmin && (
-            <Card title="Your team" action={<Link to="/app/users" className="btn btn-ghost btn-sm">Manage <Icon.ArrowRight size={16} /></Link>}>
+            <Card title="Your team" action={<Link to="/app/team" className="btn btn-ghost btn-sm">Manage <Icon.ArrowRight size={16} /></Link>}>
               <div className="team-grid">
                 <TeamTile icon={<Icon.Shield size={18} />} tone="purple" label="Admins" value={superAdmin.admins} />
                 <TeamTile icon={<Icon.Inbox size={18} />} tone="blue" label="Staff" value={superAdmin.staff} />

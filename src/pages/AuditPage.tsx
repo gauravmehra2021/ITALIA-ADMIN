@@ -53,7 +53,8 @@ function tidyDetails(details: string) {
   return m ? m[1] : details;
 }
 
-type Row = AuditLog & { device?: string };
+/** `ids` = every stored entry this row stands for (a sign-in is two entries). */
+type Row = AuditLog & { device?: string; ids: string[] };
 
 /** The server writes two rows per sign-in (who + which device); show them as one. */
 function mergeRows(list: AuditLog[]): Row[] {
@@ -65,17 +66,50 @@ function mergeRows(list: AuditLog[]): Row[] {
       const twin = out.find((r) => r.action === 'login_success' && !r.device && r.actorUserId === a.actorUserId && Math.abs(+new Date(r.createdAtUtc) - t) < 5000);
       if (twin) {
         twin.device = describeDevice(a.details.slice(7));
+        twin.ids.push(a.id);
         continue;
       }
-      out.push({ ...a, details: 'Signed in', device: describeDevice(a.details.slice(7)) });
+      out.push({ ...a, details: 'Signed in', device: describeDevice(a.details.slice(7)), ids: [a.id] });
       continue;
     }
-    out.push({ ...a });
+    out.push({ ...a, ids: [a.id] });
   }
   return out;
 }
 
 const PAGE = 50;
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' }));
+const THIS_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: THIS_YEAR - 2024 + 1 }, (_, i) => THIS_YEAR - i);
+
+/** Year / month / day the Super Admin picked; '' = any. Month is 0–11. */
+type Period = { year: string; month: string; day: string };
+
+/** Local-time period → [from, to) in UTC, or null for "all time". */
+function periodRange(p: Period): { fromUtc: string; toUtc: string } | null {
+  if (!p.year) return null;
+  const y = +p.year;
+  let from: Date, to: Date;
+  if (p.month === '') {
+    from = new Date(y, 0, 1);
+    to = new Date(y + 1, 0, 1);
+  } else if (p.day === '') {
+    from = new Date(y, +p.month, 1);
+    to = new Date(y, +p.month + 1, 1);
+  } else {
+    from = new Date(y, +p.month, +p.day);
+    to = new Date(y, +p.month, +p.day + 1);
+  }
+  return { fromUtc: from.toISOString(), toUtc: to.toISOString() };
+}
+
+function periodLabel(p: Period) {
+  if (!p.year) return 'all time';
+  if (p.month === '') return p.year;
+  if (p.day === '') return `${MONTHS[+p.month]} ${p.year}`;
+  return new Date(+p.year, +p.month, +p.day).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 export function AuditPage() {
   const [items, setItems] = useState<AuditLog[]>([]);
@@ -85,12 +119,15 @@ export function AuditPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(PAGE);
+  const [period, setPeriod] = useState<Period>({ year: '', month: '', day: '' });
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  async function load() {
+  async function load(p: Period = period) {
     setLoading(true);
     setError(null);
     try {
-      const [logs, users] = await Promise.all([auditApi.list(), usersApi.list().catch(() => [] as User[])]);
+      const [logs, users] = await Promise.all([auditApi.list(periodRange(p) ?? undefined), usersApi.list().catch(() => [] as User[])]);
       setItems(logs);
       setPeople(new Map(users.map((u) => [u.id, u])));
     } catch (e) {
@@ -101,8 +138,61 @@ export function AuditPage() {
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    void load(period);
+    setLimit(PAGE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
+
+  const changePeriod = (next: Partial<Period>) => setPeriod((p) => {
+    const merged = { ...p, ...next };
+    if (!merged.year) return { year: '', month: '', day: '' };
+    if (merged.month === '') return { ...merged, day: '' };
+    const days = new Date(+merged.year, +merged.month + 1, 0).getDate();
+    return +merged.day > days ? { ...merged, day: '' } : merged;
+  });
+
+  const daysInMonth = period.year && period.month !== '' ? new Date(+period.year, +period.month + 1, 0).getDate() : 0;
+  const filtered = filter !== 'all' || search.trim() !== '';
+
+  async function removeRow(r: Row) {
+    if (!confirm(`Delete this log entry ("${eventOf(r).label}")? This can't be undone.`)) return;
+    await runDelete({ ids: r.ids });
+  }
+
+  /** Filters on → delete exactly what's shown. No filters → delete the whole period on the server. */
+  async function removeShown() {
+    const label = periodLabel(period);
+    if (filtered) {
+      const ids = visible.flatMap((r) => r.ids);
+      if (!confirm(`Delete the ${visible.length} log entries shown (${label}, current filter)? This can't be undone.`)) return;
+      await runDelete({ ids });
+      return;
+    }
+    const range = periodRange(period);
+    if (!range) {
+      const typed = prompt('This deletes EVERY audit log entry, from all time. Type DELETE to confirm.');
+      if (typed?.trim().toUpperCase() !== 'DELETE') return;
+      await runDelete({ all: true });
+      return;
+    }
+    if (!confirm(`Delete all audit logs from ${label}? This can't be undone.`)) return;
+    await runDelete(range);
+  }
+
+  async function runDelete(body: Parameters<typeof auditApi.remove>[0]) {
+    setDeleting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await auditApi.remove(body);
+      setNotice(`${res.deleted} log ${res.deleted === 1 ? 'entry' : 'entries'} deleted.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the logs.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const rows = useMemo(() => mergeRows(items), [items]);
 
@@ -131,13 +221,14 @@ export function AuditPage() {
     return new Date(key).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
-  const today = rows.filter((r) => new Date(r.createdAtUtc).toDateString() === new Date().toDateString());
+  const pLabel = periodLabel(period);
+  const people_ = new Set(rows.map((r) => r.actorUserId).filter(Boolean)).size;
 
   return (
     <div className="page">
       <PageHeader
         title="Audit Log"
-        subtitle="A permanent record of sign-ins and important changes, so you can always see who did what and when."
+        subtitle="A record of sign-ins and important changes, so you can see who did what and when. Filter by year, month or day, and delete old entries you no longer need."
         actions={
           <button type="button" className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
             <Icon.Refresh size={17} /> Refresh
@@ -146,15 +237,41 @@ export function AuditPage() {
       />
 
       {error && <Alert tone="error">{error}</Alert>}
+      {notice && <Alert tone="success" onClose={() => setNotice(null)}>{notice}</Alert>}
 
       <div className="stats">
-        <div className="stat-card tone-blue"><span className="stat-icon"><Icon.Activity size={21} /></span><span className="stat-body"><span className="stat-value">{today.length}</span><span className="stat-label">Events today</span></span></div>
-        <div className="stat-card tone-green"><span className="stat-icon"><Icon.Login size={21} /></span><span className="stat-body"><span className="stat-value">{today.filter((r) => r.action === 'login_success').length}</span><span className="stat-label">Sign-ins today</span></span></div>
+        <div className="stat-card tone-blue"><span className="stat-icon"><Icon.Activity size={21} /></span><span className="stat-body"><span className="stat-value">{rows.length}</span><span className="stat-label">Events · {pLabel}</span></span></div>
+        <div className="stat-card tone-green"><span className="stat-icon"><Icon.Login size={21} /></span><span className="stat-body"><span className="stat-value">{rows.filter((r) => r.action === 'login_success').length}</span><span className="stat-label">Sign-ins</span></span></div>
         <div className="stat-card tone-orange"><span className="stat-icon"><Icon.Key size={21} /></span><span className="stat-body"><span className="stat-value">{rows.filter((r) => r.action.includes('password')).length}</span><span className="stat-label">Password resets</span></span></div>
-        <div className="stat-card tone-purple"><span className="stat-icon"><Icon.Layers size={21} /></span><span className="stat-body"><span className="stat-value">{rows.length}</span><span className="stat-label">Events recorded</span></span></div>
+        <div className="stat-card tone-purple"><span className="stat-icon"><Icon.Users size={21} /></span><span className="stat-body"><span className="stat-value">{people_}</span><span className="stat-label">People active</span></span></div>
       </div>
 
       <section className="card">
+        <div className="card-head toolbar audit-period">
+          <div className="audit-period-picks">
+            <Icon.Calendar size={17} />
+            <select className="select input-sm" aria-label="Year" value={period.year} onChange={(e) => changePeriod({ year: e.target.value })}>
+              <option value="">All years</option>
+              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select className="select input-sm" aria-label="Month" value={period.month} disabled={!period.year} onChange={(e) => changePeriod({ month: e.target.value })}>
+              <option value="">All months</option>
+              {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </select>
+            <select className="select input-sm" aria-label="Day" value={period.day} disabled={!daysInMonth} onChange={(e) => changePeriod({ day: e.target.value })}>
+              <option value="">All days</option>
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {period.year && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => changePeriod({ year: '' })}>
+                <Icon.X size={15} /> Clear
+              </button>
+            )}
+          </div>
+          <button type="button" className="btn btn-danger btn-sm" disabled={deleting || loading || visible.length === 0} onClick={() => void removeShown()}>
+            <Icon.Trash size={15} /> {deleting ? 'Deleting…' : filtered ? `Delete ${visible.length} shown` : `Delete logs · ${pLabel}`}
+          </button>
+        </div>
         <div className="card-head toolbar">
           <div className="chips">
             {FILTERS.map((f) => (
@@ -172,7 +289,7 @@ export function AuditPage() {
         {loading ? (
           <Spinner label="Loading events…" />
         ) : visible.length === 0 ? (
-          <EmptyState icon="ShieldCheck" title="No events found" text="Try another filter or search word." />
+          <EmptyState icon="ShieldCheck" title="No events found" text={`Nothing recorded for ${pLabel} with this filter. Try another period, filter or search word.`} />
         ) : (
           <div className="timeline">
             {groups.map(([day, list]) => (
@@ -200,9 +317,14 @@ export function AuditPage() {
                             {r.device && <span className="muted"><Icon.Globe size={13} /> {r.device}</span>}
                           </div>
                         </div>
-                        <time className="event-time" dateTime={r.createdAtUtc} title={new Date(r.createdAtUtc).toLocaleString()}>
-                          {new Date(r.createdAtUtc).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                        </time>
+                        <span className="event-end">
+                          <time className="event-time" dateTime={r.createdAtUtc} title={new Date(r.createdAtUtc).toLocaleString()}>
+                            {new Date(r.createdAtUtc).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                          </time>
+                          <button type="button" className="btn btn-danger-soft btn-sm event-delete" title="Delete this entry" aria-label="Delete this entry" disabled={deleting} onClick={() => void removeRow(r)}>
+                            <Icon.Trash size={14} />
+                          </button>
+                        </span>
                       </li>
                     );
                   })}

@@ -300,3 +300,20 @@
   .account-btn { padding: 3px; }
   .account-menu { width: min(280px, calc(100vw - 32px)); }
 }
+
+/* Member has view-only access to this module */
+.view-only-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: var(--blue-50);
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.view-only-bar svg { flex: none; margin-top: 2px; color: var(--accent); }

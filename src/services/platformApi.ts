@@ -26,6 +26,9 @@ import type {
   StaffDashboard,
   SuperAdminDashboard,
   TeamRole,
+  TeamPermissionCatalog,
+  TeamPasswordResult,
+  PermissionMap,
   TestAttempt,
   UpdateEnquiryStatusRequest,
   User,
@@ -67,6 +70,8 @@ export const authApi = {
   resetPassword: (payload: { challengeId: string; code: string; newPassword: string }) =>
     api.post('/api/auth/reset-password', payload),
   logout: () => api.post('/api/auth/logout'),
+  /** The signed-in account as it is now — picks up role and permission changes without signing in again. */
+  me: () => api.get<User>('/api/auth/me'),
 };
 
 export const coursesApi = {
@@ -122,7 +127,10 @@ export const s3UploadApi = {
 export const classesApi = {
   list: () => api.get<ClassSession[]>('/api/classes'),
   meeting: (id: string) => api.get<ClassSession>(`/api/classes/${id}/meeting`),
-  create: (body: unknown) => api.post<ClassSession>('/api/classes', body),
+  /** A live class for one batch; teacher defaults to the batch's teacher, course is optional. */
+  create: (body: { batchId: string; title: string; scheduledAtUtc: string; durationMinutes: number; courseId?: string | null; mentorId?: string | null; meetingUrl?: string }) =>
+    api.post<ClassSession>('/api/classes', body),
+  cancel: (id: string) => api.post<ClassSession>(`/api/classes/${id}/cancel`),
   notifyStart: (id: string) => api.post<{ sentCount: number; targetDescription: string }>(`/api/classes/${id}/notify-start`),
 };
 
@@ -209,12 +217,24 @@ export const assignmentsApi = {
 };
 
 export const usersApi = {
+  /** Every account (students too) — used by the audit log and notification pickers. */
   list: () => api.get<User[]>('/api/users'),
+  /** The team only: Super Admin, Admins, Staff and Teachers (removed ones included). */
+  team: () => api.get<User[]>('/api/users/team'),
+  catalog: () => api.get<TeamPermissionCatalog>('/api/users/permissions-catalog'),
   updateStatus: (id: string, isActive: boolean) =>
     api.put<User>(`/api/users/${id}/status`, { isActive }),
   /** Role names are sent as text (the backend uses string enums): 'Admin' | 'Staff' | 'Mentor'. */
   updateRole: (id: string, role: TeamRole) =>
     api.put<User>(`/api/users/${id}/role`, { role }),
+  updateDetails: (id: string, data: { firstName: string; lastName: string; email: string; phoneNumber?: string | null }) =>
+    api.put<User>(`/api/users/${id}`, data),
+  /** null = back to the role's default access. */
+  updatePermissions: (id: string, permissions: PermissionMap | null) =>
+    api.put<User>(`/api/users/${id}/permissions`, { permissions }),
+  /** Leave the password empty and the server makes one. */
+  resetPassword: (id: string, password?: string) =>
+    api.post<TeamPasswordResult>(`/api/users/${id}/reset-password`, { password: password || null }),
   create: (data: {
     email: string;
     password?: string;
@@ -222,13 +242,24 @@ export const usersApi = {
     lastName: string;
     role: TeamRole;
     phoneNumber?: string;
+    permissions?: PermissionMap | null;
   }) => api.post<User>('/api/users', data),
   softDelete: (id: string) => api.delete(`/api/users/${id}`),
   restore: (id: string) => api.post(`/api/users/${id}/restore`),
 };
 
 export const auditApi = {
-  list: () => api.get<AuditLog[]>('/api/audit'),
+  /** Optional period as UTC ISO strings: [fromUtc, toUtc). */
+  list: (range?: { fromUtc?: string; toUtc?: string }) => {
+    const q = new URLSearchParams();
+    if (range?.fromUtc) q.set('fromUtc', range.fromUtc);
+    if (range?.toUtc) q.set('toUtc', range.toUtc);
+    const qs = q.toString();
+    return api.get<AuditLog[]>(`/api/audit${qs ? `?${qs}` : ''}`);
+  },
+  /** Super Admin only — permanent. Ids, or a period, or { all: true } for everything. */
+  remove: (body: { ids?: string[]; fromUtc?: string; toUtc?: string; all?: boolean }) =>
+    api.post<{ deleted: number }>('/api/audit/delete', body),
 };
 
 export const enquiriesApi = {
@@ -289,15 +320,18 @@ export const curriculumApi = {
 
 export const studentsApi = {
   list: () => api.get<Student[]>('/api/students'),
-  create: (data: { firstName: string; lastName: string; email: string; phoneNumber?: string; batchId?: string | null; preferredLanguage?: string }) =>
+  create: (data: { firstName: string; lastName: string; email: string; phoneNumber?: string; batchIds?: string[]; preferredLanguage?: string }) =>
     api.post<StudentPasswordResult>('/api/students', data),
-  update: (id: string, data: { firstName: string; lastName: string; phoneNumber?: string | null; batchId?: string | null; preferredLanguage?: string }) =>
+  update: (id: string, data: { firstName: string; lastName: string; phoneNumber?: string | null; batchIds?: string[]; preferredLanguage?: string }) =>
     api.put<Student>(`/api/students/${id}`, data),
-  /** batchId null = take the students out of their batch. */
-  move: (studentIds: string[], batchId: string | null) =>
-    api.post<{ moved: number; batchName?: string | null }>('/api/students/move', { studentIds, batchId }),
+  /** replace: this becomes their only batch (null = no batch) · add: also join it · remove: leave it. */
+  move: (studentIds: string[], batchId: string | null, mode: 'replace' | 'add' | 'remove' = 'replace') =>
+    api.post<{ moved: number; batchName?: string | null }>('/api/students/move', { studentIds, batchId, mode }),
   setStatus: (id: string, isActive: boolean) => api.put<Student>(`/api/students/${id}/status`, { isActive }),
   resetPassword: (id: string) => api.post<StudentPasswordResult>(`/api/students/${id}/reset-password`),
+  /** Paid student → place in batches; emails a one-time password unless they signed up themselves (then temporaryPassword is null). */
+  giveAccess: (id: string, batchIds: string[]) =>
+    api.post<{ student: Student; temporaryPassword?: string | null }>(`/api/students/${id}/give-access`, { batchIds }),
 };
 
 export const batchesApi = {
@@ -310,9 +344,12 @@ export const batchesApi = {
 
 export interface SaveBatch {
   name: string;
-  level: string;
+  /** No longer used in the panel (kept for older batches). */
+  level?: string;
   description?: string;
   mentorId?: string | null;
   courseIds: string[];
   startDateUtc?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
 }

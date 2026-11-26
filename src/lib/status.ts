@@ -3,19 +3,24 @@ import type { ClassSession, Enquiry, EnquiryStatus } from '../types';
 
 /* ── Admissions pipeline ────────────────────────────────────────────────── */
 
-export const ENQUIRY_STAGES: EnquiryStatus[] = ['New', 'Contacted', 'Qualified', 'Enrolled', 'Closed'];
+/** Display order (Paid comes after Enrolled). */
+export const ENQUIRY_STAGES: EnquiryStatus[] = ['New', 'Contacted', 'Qualified', 'Enrolled', 'Paid', 'Closed'];
+
+/** The server's numeric values, in case a status arrives as a number. */
+const ENQUIRY_BY_NUMBER: EnquiryStatus[] = ['New', 'Contacted', 'Qualified', 'Enrolled', 'Closed', 'Paid'];
 
 export const ENQUIRY_META: Record<EnquiryStatus, { label: string; tone: Tone; help: string }> = {
   New: { label: 'New', tone: 'blue', help: 'Not contacted yet' },
   Contacted: { label: 'Contacted', tone: 'orange', help: 'First call or message done' },
   Qualified: { label: 'Qualified', tone: 'purple', help: 'Good fit, discussing enrolment' },
-  Enrolled: { label: 'Enrolled', tone: 'green', help: 'Became a student' },
+  Enrolled: { label: 'Enrolled', tone: 'teal', help: 'Agreed to join, payment not received yet' },
+  Paid: { label: 'Paid', tone: 'green', help: 'Payment received: the student account is made' },
   Closed: { label: 'Closed', tone: 'gray', help: 'Not going ahead' },
 };
 
 export function enquiryStatus(status: Enquiry['status']): EnquiryStatus {
   if (typeof status === 'string') return status;
-  return ENQUIRY_STAGES[status] ?? 'New';
+  return ENQUIRY_BY_NUMBER[status] ?? 'New';
 }
 
 /* ── Live classes ───────────────────────────────────────────────────────── */
@@ -46,3 +51,7 @@ export const isUpcoming = (c: ClassSession) => {
   const s = classStatus(c);
   return (s === 'Scheduled' || s === 'Live') && new Date(c.scheduledAtUtc).getTime() + c.durationMinutes * 60000 > Date.now();
 };
+
+/** "11:00–12:00" for a batch with a usual class time, otherwise null. */
+export const batchTiming = (b?: { startTime?: string | null; endTime?: string | null } | null) =>
+  b?.startTime && b?.endTime ? `${b.startTime}–${b.endTime}` : null;

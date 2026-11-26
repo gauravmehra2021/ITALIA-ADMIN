@@ -1,0 +1,149 @@
+/* ── Team page ─────────────────────────────────────────────────────────────── */
+
+.team-phone { white-space: nowrap; }
+
+.access-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.access-icons { display: inline-flex; gap: 3px; }
+.access-dot {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--green-100);
+  color: var(--green-600);
+}
+/* View only: outlined instead of filled */
+.access-dot.is-view { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+.team-table td.actions .row-end { flex-wrap: nowrap; }
+
+/* ── Permission matrix ── */
+
+.perm-intro { margin: 0 0 14px; line-height: 1.5; }
+
+.perm-matrix { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.perm-row:last-child { border-bottom: 0; }
+.perm-area { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.perm-area > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.perm-area strong { font-size: 0.88rem; color: var(--ink); }
+.perm-area small { font-size: 0.75rem; color: var(--muted); line-height: 1.35; }
+.perm-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.seg {
+  flex: none;
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.seg-btn:hover:not(:disabled):not(.active) { background: var(--hover); color: var(--ink); }
+.seg-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg-btn.active { box-shadow: 0 1px 2px rgba(15, 30, 60, 0.12); }
+.seg-btn.level-none.active { background: var(--red-100); color: var(--red-600); }
+.seg-btn.level-view.active { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.seg-btn.level-full.active { background: var(--green-600); color: #fff; }
+
+.perm-toggle { margin: 16px 0 10px; }
+.check-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.check-row input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); }
+.check-row > span { display: flex; flex-direction: column; }
+.check-row strong { font-size: 0.88rem; }
+.check-row small { font-size: 0.76rem; color: var(--muted); }
+
+/* ── Edit drawer ── */
+
+.drawer-sub { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.drawer .tabs { margin: -4px 0 18px; }
+.drawer .tab { display: inline-flex; align-items: center; gap: 6px; }
+.drawer-section { display: flex; flex-direction: column; }
+.drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.drawer .grid-2 { grid-template-columns: 1fr 1fr; }
+
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; }
+.facts > div { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.facts dt { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-size: 0.86rem; color: var(--ink); }
+
+.sec-block { padding: 16px 0; border-top: 1px solid var(--line); }
+.sec-block:first-of-type { border-top: 0; padding-top: 0; }
+.sec-block h3 { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; margin: 0 0 4px; }
+.sec-block > p { margin: 0 0 12px; }
+.sec-block .drawer-actions { margin-top: 12px; }
+.danger-zone h3 { color: var(--red-600); }
+.pw-code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.95rem;
+  padding: 2px 8px;
+  margin: 0 6px;
+  border-radius: 6px;
+  background: var(--surface);
+  user-select: all;
+}
+
+@media (max-width: 560px) {
+  .perm-row { flex-direction: column; align-items: stretch; }
+  .seg { align-self: flex-start; }
+  .facts, .drawer .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* Keep the table inside the card: long emails are shortened, access icons stay on one line */
+.team-table .person-meta { min-width: 0; }
+.team-table .person-meta > span {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-table .access-summary { flex-wrap: nowrap; }
+@media (max-width: 900px) {
+  .team-table .person-meta > span { max-width: 220px; }
+}
+
+.perm-area strong { display: inline-flex; align-items: center; gap: 6px; }
+.perm-changed {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--purple-100);
+  color: var(--purple-600);
+}

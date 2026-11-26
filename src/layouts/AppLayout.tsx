@@ -5,38 +5,37 @@ import { Avatar, Logo } from '../components/ui';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../services/platformApi';
-import { roleLabel, type UserRole } from '../types';
+import { PERMISSION_MODULES, roleLabel, type PermissionModule, type UserRole } from '../types';
 import './layout.css';
 
-type NavItem = { to: string; label: string; icon: IconName; roles: UserRole[]; end?: boolean };
+type NavItem = { to: string; label: string; icon: IconName; roles: UserRole[]; end?: boolean; module?: PermissionModule };
 type NavGroup = { title: string; items: NavItem[] };
 
 const ALL: UserRole[] = ['SuperAdmin', 'Admin', 'Staff', 'Mentor'];
-const TEACHING: UserRole[] = ['SuperAdmin', 'Admin', 'Mentor'];
 
 const NAV: NavGroup[] = [
   { title: 'Overview', items: [{ to: '/app', label: 'Dashboard', icon: 'Grid', roles: ALL, end: true }] },
-  { title: 'Admissions', items: [{ to: '/app/enquiries', label: 'Admissions & Leads', icon: 'Inbox', roles: ['SuperAdmin', 'Admin', 'Staff'] }] },
+  { title: 'Admissions', items: [{ to: '/app/enquiries', label: 'Admissions & Leads', icon: 'Inbox', roles: ALL, module: 'enquiries' }] },
   {
     title: 'Students',
     items: [
-      { to: '/app/students', label: 'Students', icon: 'Users', roles: ALL },
-      { to: '/app/batches', label: 'Batches', icon: 'Layers', roles: ALL },
+      { to: '/app/students', label: 'Students', icon: 'Users', roles: ALL, module: 'students' },
+      { to: '/app/batches', label: 'Batches', icon: 'Layers', roles: ALL, module: 'batches' },
     ],
   },
   {
     title: 'Teaching',
     items: [
-      { to: '/app/courses', label: 'Courses & Content', icon: 'Book', roles: TEACHING },
-      { to: '/app/translations', label: 'Translations', icon: 'Globe', roles: TEACHING },
-      { to: '/app/classes', label: 'Live Classes', icon: 'Video', roles: TEACHING },
+      { to: '/app/courses', label: 'Courses & Content', icon: 'Book', roles: ALL, module: 'courses' },
+      { to: '/app/translations', label: 'Translations', icon: 'Globe', roles: ALL, module: 'translations' },
+      { to: '/app/classes', label: 'Live Classes', icon: 'Video', roles: ALL, module: 'classes' },
     ],
   },
-  { title: 'Communication', items: [{ to: '/app/notifications', label: 'Notifications', icon: 'Bell', roles: TEACHING }] },
+  { title: 'Communication', items: [{ to: '/app/notifications', label: 'Notifications', icon: 'Bell', roles: ALL, module: 'notifications' }] },
   {
     title: 'Administration',
     items: [
-      { to: '/app/users', label: 'Users & Roles', icon: 'Users', roles: ['SuperAdmin'] },
+      { to: '/app/team', label: 'Team', icon: 'Shield', roles: ['SuperAdmin'] },
       { to: '/app/audit', label: 'Audit Log', icon: 'ShieldCheck', roles: ['SuperAdmin'] },
     ],
   },
@@ -51,7 +50,7 @@ function pageTitle(path: string): { title: string; parent?: { to: string; label:
 }
 
 export function AppLayout() {
-  const { user, logout, isDemo, hasRole } = useAuth();
+  const { user, logout, isDemo, hasRole, can } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -68,7 +67,7 @@ export function AppLayout() {
   const [unread, setUnread] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const canSeeNotifications = hasRole(...TEACHING);
+  const canSeeNotifications = can('notifications');
 
   const toggleSidebar = useCallback(() => {
     setCollapsed((prev) => {
@@ -124,7 +123,13 @@ export function AppLayout() {
     navigate('/login');
   }
 
-  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => hasRole(...i.roles)) })).filter((g) => g.items.length > 0);
+  const allowed = (i: NavItem) => hasRole(...i.roles) && (!i.module || can(i.module));
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0);
+  // The page belongs to a module this member can only look at: say so before they try to change anything.
+  const currentItem = NAV.flatMap((g) => g.items).find((i) => i.module && location.pathname.startsWith(i.to));
+  const viewOnly = currentItem?.module && can(currentItem.module) && !can(currentItem.module, 'Full')
+    ? PERMISSION_MODULES.find((m) => m.key === currentItem.module)?.label
+    : null;
   const { title, parent } = pageTitle(location.pathname);
   // The lesson editor needs every pixel of width.
   const wide = /\/lessons\//.test(location.pathname);
@@ -254,6 +259,14 @@ export function AppLayout() {
         </header>
 
         <main className={`content ${wide ? 'is-wide' : ''}`}>
+          {viewOnly && (
+            <div className="view-only-bar" role="status">
+              <Icon.Eye size={16} />
+              <span>
+                <strong>View only.</strong> You can look at {viewOnly} but not change anything{viewOnly === 'Students' ? ', except sending the login to new paid students' : ''}. Ask the Super Admin if you need full access.
+              </span>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

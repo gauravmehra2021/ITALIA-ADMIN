@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icons';
 import { Alert, EmptyState, Modal, PageHeader, Spinner, StatCard, formatDate } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
+import { batchTiming } from '../lib/status';
 import { batchesApi, coursesApi, studentsApi } from '../services/platformApi';
-import { BATCH_LEVELS, roleLabel, type Batch, type Course, type TeacherOption } from '../types';
+import { roleLabel, type Batch, type Course, type TeacherOption } from '../types';
 import './pages.css';
 import './students.css';
 
@@ -16,25 +17,28 @@ import './students.css';
 
 interface FormState {
   name: string;
-  level: string;
   description: string;
   mentorId: string;
   startDate: string;
+  startTime: string;
+  endTime: string;
   courseIds: string[];
 }
 
-const emptyForm = (): FormState => ({ name: '', level: 'A0', description: '', mentorId: '', startDate: '', courseIds: [] });
+const emptyForm = (): FormState => ({ name: '', description: '', mentorId: '', startDate: '', startTime: '', endTime: '', courseIds: [] });
 
 const isPublished = (status: unknown) => status === 'Published' || status === 1;
 
 export function BatchesPage() {
-  const { hasRole } = useAuth();
-  const isAdmin = hasRole('SuperAdmin', 'Admin');
+  const { can } = useAuth();
+  const isAdmin = can('batches', 'Full');
 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [withoutBatch, setWithoutBatch] = useState(0);
+  // Unique students in at least one batch (a student in two batches counts once).
+  const [totalInBatches, setTotalInBatches] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -51,7 +55,8 @@ export function BatchesPage() {
       const [b, t, s] = await Promise.all([batchesApi.list(), batchesApi.teachers(), studentsApi.list()]);
       setBatches(b);
       setTeachers(t);
-      setWithoutBatch(s.filter((x) => !x.isDeleted && !x.batchId).length);
+      setWithoutBatch(s.filter((x) => !x.isDeleted && !x.batchId && !(x.batches?.length)).length);
+      setTotalInBatches(s.filter((x) => !x.isDeleted && (!!x.batchId || !!x.batches?.length)).length);
       if (isAdmin) {
         const page = await coursesApi.list({ pageSize: 200, sortBy: 'order' });
         setCourses(page.items);
@@ -68,7 +73,6 @@ export function BatchesPage() {
     void load();
   }, []);
 
-  const totalInBatches = useMemo(() => batches.reduce((n, b) => n + b.studentCount, 0), [batches]);
   const openToAll = courses.filter((c) => c.openToAll && isPublished(c.status));
 
   function openCreate() {
@@ -82,10 +86,11 @@ export function BatchesPage() {
     setEditing(b);
     setForm({
       name: b.name,
-      level: b.level,
       description: b.description,
       mentorId: b.mentorId ?? '',
       startDate: b.startDateUtc ? b.startDateUtc.slice(0, 10) : '',
+      startTime: b.startTime ?? '',
+      endTime: b.endTime ?? '',
       courseIds: b.courses.map((c) => c.id),
     });
     setFormError(null);
@@ -102,11 +107,12 @@ export function BatchesPage() {
     setFormError(null);
     const body = {
       name: form.name.trim(),
-      level: form.level,
       description: form.description.trim(),
       mentorId: form.mentorId || null,
       courseIds: form.courseIds,
       startDateUtc: form.startDate ? new Date(`${form.startDate}T00:00:00Z`).toISOString() : null,
+      startTime: form.startTime || null,
+      endTime: form.endTime || null,
     };
     try {
       if (editing) {
@@ -172,13 +178,16 @@ export function BatchesPage() {
           {batches.map((b) => (
             <article key={b.id} className="card batch-card">
               <div className="batch-top">
-                <span className="batch-level">{b.level}</span>
+                <span className="batch-level" aria-hidden><Icon.Layers size={20} /></span>
                 <div className="batch-title">
                   <h3>{b.name}</h3>
                   <span className="muted small">
                     {b.mentorName ? <><Icon.Cap size={13} /> {b.mentorName}</> : 'No teacher yet'}
                     {b.startDateUtc && <> · Starts {formatDate(b.startDateUtc)}</>}
                   </span>
+                  {batchTiming(b) && (
+                    <span className="batch-time"><Icon.Clock size={13} /> Classes {batchTiming(b)}</span>
+                  )}
                 </div>
               </div>
               {b.description && <p className="batch-desc">{b.description}</p>}
@@ -228,17 +237,9 @@ export function BatchesPage() {
       >
         <form id="batch-form" onSubmit={save}>
           {formError && <div style={{ marginBottom: 14 }}><Alert tone="error">{formError}</Alert></div>}
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor="b-name">Batch name</label>
-              <input id="b-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. A0 Morning – Jan 2027" maxLength={80} required />
-            </div>
-            <div className="field">
-              <label htmlFor="b-level">Level</label>
-              <select id="b-level" className="select" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
-                {BATCH_LEVELS.map((l) => <option key={l} value={l}>{l}{l === 'A0' ? ' – complete beginners' : ''}</option>)}
-              </select>
-            </div>
+          <div className="field">
+            <label htmlFor="b-name">Batch name</label>
+            <input id="b-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Morning 11–12" maxLength={80} required />
           </div>
           <div className="grid-2">
             <div className="field">
@@ -254,6 +255,19 @@ export function BatchesPage() {
               <input id="b-start" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
             </div>
           </div>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="b-time-start">Class starts <span className="muted">(optional)</span></label>
+              <input id="b-time-start" type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+            </div>
+            <div className="field">
+              <label htmlFor="b-time-end">Class ends</label>
+              <input id="b-time-end" type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
+            </div>
+          </div>
+          <span className="hint" style={{ display: 'block', marginTop: -8, marginBottom: 14 }}>
+            The batch’s usual live-class time, e.g. 11:00–12:00 for a morning batch or 17:00–18:00 for an evening batch. Scheduling a class for this batch fills it in. Students can be in more than one batch.
+          </span>
           <div className="field">
             <label htmlFor="b-desc">Notes <span className="muted">(optional)</span></label>
             <input id="b-desc" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. Mon–Fri 9:00, students going to Italy for work" maxLength={200} />

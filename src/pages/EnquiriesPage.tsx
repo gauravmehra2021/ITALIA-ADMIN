@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icons';
 import { Alert, EmptyState, Modal, PageHeader, Person, Spinner, StatCard, formatDate, timeAgo } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
@@ -13,7 +13,8 @@ type Filter = 'All' | EnquiryStatus;
 const digits = (phone: string) => phone.replace(/[^\d]/g, '');
 
 export function EnquiriesPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const canEdit = can('enquiries', 'Full');
   const [params, setParams] = useSearchParams();
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +80,9 @@ export function EnquiriesPage() {
       // The server makes the current team member the owner of an unassigned lead.
       const updated = await enquiriesApi.updateStatus(selected.id, { status: next, staffNotes: notes });
       setEnquiries((list) => list.map((e) => (e.id === selected.id ? { ...e, ...updated } : e)));
-      setToast(`${selected.fullName} saved as “${ENQUIRY_META[next].label}”.`);
+      setToast(next === 'Paid' && !selected.convertedUserId
+        ? `${selected.fullName} is now a student. Send their login from Students → New (paid).`
+        : `${selected.fullName} saved as “${ENQUIRY_META[next].label}”.`);
       closeLead();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not save this lead.');
@@ -104,7 +107,7 @@ export function EnquiriesPage() {
   }, [enquiries, filter, search]);
 
   const total = enquiries.length;
-  const conversion = total ? Math.round((counts.Enrolled / total) * 100) : 0;
+  const conversion = total ? Math.round((counts.Paid / total) * 100) : 0;
 
   return (
     <div className="page">
@@ -125,7 +128,7 @@ export function EnquiriesPage() {
         <StatCard icon="Inbox" tone="blue" label="All enquiries" value={total} />
         <StatCard icon="Sparkles" tone="orange" label="New — not contacted" value={counts.New} />
         <StatCard icon="Phone" tone="purple" label="In follow-up" value={counts.Contacted + counts.Qualified} />
-        <StatCard icon="CheckCircle" tone="green" label="Enrolled" value={counts.Enrolled} hint={`${conversion}% conversion`} />
+        <StatCard icon="CheckCircle" tone="green" label="Paid" value={counts.Paid} hint={`${conversion}% conversion · ${counts.Enrolled} enrolled, not paid yet`} />
       </div>
 
       <section className="card">
@@ -216,7 +219,7 @@ export function EnquiriesPage() {
         footer={
           <>
             <button type="button" className="btn btn-ghost" onClick={closeLead} disabled={saving}>Cancel</button>
-            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={saving}>
+            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={saving || !canEdit} title={canEdit ? undefined : 'View only'}>
               {saving ? 'Saving…' : 'Save changes'}
             </button>
           </>
@@ -267,6 +270,16 @@ export function EnquiriesPage() {
                 ))}
               </div>
             </div>
+
+            {selected.convertedUserId ? (
+              <Alert tone="success">
+                Student account made for {selected.email}. <Link to="/app/students?tab=new">Open in Students</Link> to send the login.
+              </Alert>
+            ) : stage === 'Paid' ? (
+              <Alert tone="info">
+                Saving as Paid makes a student account for {selected.email}. No email goes out yet: you send the login from Students → New (paid).
+              </Alert>
+            ) : null}
 
             <div className="field" style={{ marginBottom: 0 }}>
               <label htmlFor="lead-notes">Notes</label>

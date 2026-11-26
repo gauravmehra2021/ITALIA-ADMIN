@@ -121,3 +121,54 @@
   .st-table td[data-label='Student'] { max-width: 270px; }
   .st-table .person-meta span { max-width: 205px; }
 }
+
+/* A student can be in several batches */
+.st-batches { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.st-batch-time { font-weight: 500; opacity: 0.8; }
+.st-batch-pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.st-batch-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.st-batch-option:hover { border-color: var(--line-strong); background: var(--hover); }
+.st-batch-option.active { border-color: var(--accent); background: var(--blue-50); box-shadow: 0 0 0 3px var(--focus); }
+.st-batch-option input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+.st-batch-option > span { display: flex; flex-direction: column; min-width: 0; }
+.st-batch-option strong { font-size: 0.88rem; color: var(--ink); }
+.st-batch-option small { font-size: 0.75rem; color: var(--muted); }
+@media (max-width: 560px) { .st-batch-pick { grid-template-columns: 1fr; } }
+
+.batch-time { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
+
+/* Batch picker: keep the checkboxes small (the general .field input style makes inputs full width) */
+.field .st-batch-option input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  flex: none;
+}
+.st-batches { flex-direction: column; align-items: flex-start; }
+.st-batches .badge { white-space: nowrap; }
+.batch-title .batch-time { display: flex; width: 100%; }
+
+/* Stage tabs: All · New (paid) · Payment pending · Active · Suspended */
+.st-tabs { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; border-bottom: 1px solid var(--line); }
+.st-tab-hint { margin: 0; }
