@@ -35,6 +35,10 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
   const [openToAll, setOpenToAll] = useState(course?.openToAll ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Editing a course that students can already see: optionally tell them what changed.
+  const wasPublished = enumName(course?.status, ['Draft', 'Published', 'Archived']) === 'Published';
+  const [notifyStudents, setNotifyStudents] = useState(false);
+  const [updateNote, setUpdateNote] = useState('');
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -58,6 +62,9 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
       language: 'Italian',
       price: 0,
       currency: 'EUR',
+      // Publishing a draft always tells the course's students; for edits it's the editor's choice.
+      notifyStudents: wasPublished && status === 'Published' && notifyStudents,
+      updateNote: notifyStudents ? updateNote.trim() || null : null,
     };
     try {
       const saved = course ? await coursesApi.update(course.id, body) : await coursesApi.create(body);
@@ -124,6 +131,21 @@ export function CourseForm({ course, onSaved, onCancel, submitLabel }: {
         <input type="checkbox" checked={openToAll} onChange={(e) => setOpenToAll(e.target.checked)} />
         Open to every student (e.g. a free demo course). Other courses are opened only through a batch.
       </label>
+      {course && wasPublished && status === 'Published' && (
+        <div className="b-field">
+          <label className="b-check">
+            <input type="checkbox" checked={notifyStudents} onChange={(e) => setNotifyStudents(e.target.checked)} />
+            Tell this course's students about this update (they get a notification)
+          </label>
+          {notifyStudents && (
+            <input className="b-input" value={updateNote} maxLength={300} onChange={(e) => setUpdateNote(e.target.value)}
+              placeholder="What changed? e.g. New speaking practice added to Chapter 3" aria-label="Update message" />
+          )}
+        </div>
+      )}
+      {course && !wasPublished && status === 'Published' && (
+        <p className="b-hint" style={{ margin: 0 }}>Publishing sends a "New course" notification to the students who can open it.</p>
+      )}
       <div className="b-row" style={{ justifyContent: 'flex-end' }}>
         {onCancel && <button type="button" className="b-btn" onClick={onCancel}>Cancel</button>}
         <button className="b-btn b-btn-primary" disabled={busy}>{busy ? 'Saving…' : submitLabel ?? (course ? 'Save changes' : 'Create course')}</button>

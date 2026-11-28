@@ -20,6 +20,12 @@ import type {
   Material,
   MentorDashboard,
   NotificationItem,
+  NotificationBulkResult,
+  NotificationBroadcast,
+  AudienceOptions,
+  Paged,
+  SendAnnouncement,
+  SendAnnouncementResult,
   PagedResult,
   PresignedUploadResponse,
   Progress,
@@ -165,8 +171,21 @@ export const aiApi = {
 };
 
 export const notificationsApi = {
+  /** My latest 50 notifications. */
   list: () => api.get<NotificationItem[]>('/api/notifications'),
-  markRead: (id: string) => api.post(`/api/notifications/${id}/read`),
+  history: (page: number, pageSize = 20, unreadOnly = false) =>
+    api.get<Paged<NotificationItem>>(`/api/notifications/history?page=${page}&pageSize=${pageSize}&unreadOnly=${unreadOnly}`),
+  unreadCount: () => api.get<{ unreadCount: number }>('/api/notifications/unread-count'),
+  markRead: (id: string) => api.post<NotificationBulkResult>(`/api/notifications/${id}/read`),
+  markAllRead: () => api.post<NotificationBulkResult>('/api/notifications/read-all'),
+  remove: (id: string) => api.delete<NotificationBulkResult>(`/api/notifications/${id}`),
+  removeRead: () => api.delete<NotificationBulkResult>('/api/notifications/read'),
+  /** Who the signed-in member may send to (Teachers: only their own students). */
+  audience: () => api.get<AudienceOptions>('/api/notifications/audience'),
+  sendAnnouncement: (data: SendAnnouncement) => api.post<SendAnnouncementResult>('/api/notifications/announcements', data),
+  announcements: (page: number, pageSize = 10) =>
+    api.get<Paged<NotificationBroadcast>>(`/api/notifications/announcements?page=${page}&pageSize=${pageSize}`),
+  /** Older endpoint (one person or one role); the Notifications page now uses sendAnnouncement. */
   send: (data: {
     title: string;
     message: string;

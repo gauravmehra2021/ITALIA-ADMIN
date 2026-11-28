@@ -4,7 +4,8 @@ import { Icon, type IconName } from '../components/Icons';
 import { Avatar, Logo } from '../components/ui';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
-import { notificationsApi } from '../services/platformApi';
+import { NotificationsProvider, useNotifications } from '../hooks/useNotifications';
+import { NotificationBell } from '../components/NotificationBell';
 import { PERMISSION_MODULES, roleLabel, type PermissionModule, type UserRole } from '../types';
 import './layout.css';
 
@@ -51,7 +52,16 @@ function pageTitle(path: string): { title: string; parent?: { to: string; label:
 }
 
 export function AppLayout() {
+  return (
+    <NotificationsProvider>
+      <Shell />
+    </NotificationsProvider>
+  );
+}
+
+function Shell() {
   const { user, logout, isDemo, hasRole, can } = useAuth();
+  const { unreadCount: unread } = useNotifications();
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,7 +75,6 @@ export function AppLayout() {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const canSeeNotifications = can('notifications');
@@ -82,16 +91,11 @@ export function AppLayout() {
     });
   }, []);
 
-  // Close menus when the page changes; refresh the unread count.
+  // Close menus when the page changes. (The unread count is live: see NotificationsProvider.)
   useEffect(() => {
     setMobileOpen(false);
     setMenuOpen(false);
-    if (!canSeeNotifications) return;
-    notificationsApi
-      .list()
-      .then((list) => setUnread(list.filter((n) => !n.isRead).length))
-      .catch(() => setUnread(0));
-  }, [location.pathname, canSeeNotifications]);
+  }, [location.pathname]);
 
   // Ctrl+B collapses the sidebar.
   useEffect(() => {
@@ -220,12 +224,8 @@ export function AppLayout() {
               {isDark ? <Icon.Sun size={19} /> : <Icon.Moon size={19} />}
             </button>
 
-            {canSeeNotifications && (
-              <Link to="/app/notifications" className="icon-btn ghost" title="Notifications" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
-                <Icon.Bell size={19} />
-                {unread > 0 && <span className="dot-count">{unread > 9 ? '9+' : unread}</span>}
-              </Link>
-            )}
+            {/* Everyone has their own notifications; the notification centre page needs the Notifications module. */}
+            <NotificationBell canOpenPage={canSeeNotifications} />
 
             <div className="account" ref={menuRef}>
               <button type="button" className="account-btn" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen} aria-haspopup="menu">

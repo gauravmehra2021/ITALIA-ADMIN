@@ -318,3 +318,65 @@
 }
 .view-only-bar svg { flex: none; margin-top: 2px; color: var(--accent); }
 a.account-item { text-decoration: none; }
+
+/* ── Notification bell (header) ─────────────────────────────────────────── */
+.nbell { position: relative; }
+.nbell .icon-btn.is-active { background: var(--hover); color: var(--accent); border-color: var(--blue-100); }
+.nbell-status {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.nbell-status.connecting, .nbell-status.reconnecting { background: var(--gold-600); }
+.nbell-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: pop-in 0.15s ease both;
+  z-index: 80;
+}
+.nbell-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+.nbell-head > div { display: flex; flex-direction: column; }
+.nbell-head span { font-size: 0.78rem; color: var(--muted); }
+.nbell-head .link-btn { display: inline-flex; align-items: center; gap: 4px; }
+.nbell-offline { display: flex; align-items: center; gap: 6px; padding: 7px 16px; font-size: 0.78rem; background: var(--gold-100); color: var(--gold-600); }
+.nbell-list { max-height: min(440px, 62vh); overflow-y: auto; }
+.nbell-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 16px; color: var(--muted); font-size: 0.86rem; }
+.nbell-empty strong { color: var(--ink-2); }
+.nbell-item {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nbell-item:last-child { border-bottom: 0; }
+.nbell-item:hover { background: var(--hover); }
+.nbell-item.unread { background: var(--blue-50); }
+.nbell-item.unread .inbox-icon { background: var(--accent); color: #fff; }
+.nbell-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.nbell-item-body strong { font-size: 0.88rem; color: var(--ink); }
+.nbell-msg { font-size: 0.82rem; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nbell-time { font-size: 0.74rem; color: var(--muted); }
+.nbell-foot { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 11px; border-top: 1px solid var(--line); font-weight: 700; font-size: 0.86rem; color: var(--accent); text-decoration: none !important; }
+.nbell-foot:hover { background: var(--hover); }
+@media (max-width: 640px) {
+  .nbell-panel { position: fixed; top: 62px; left: 12px; right: 12px; width: auto; }
+}

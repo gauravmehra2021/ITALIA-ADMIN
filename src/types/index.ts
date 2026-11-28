@@ -273,9 +273,74 @@ export interface NotificationItem {
   userId?: string | null;
   title: string;
   message: string;
+  /** Announcement, Class, Test, Security, System, Payment, Course, Lesson, Assignment, Material (older code sent numbers). */
   type: string | number;
   isRead: boolean;
   createdAtUtc: string;
+  readAtUtc?: string | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
+  courseId?: string | null;
+  senderName?: string | null;
+}
+
+export interface Paged<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export interface NotificationBulkResult {
+  affected: number;
+  unreadCount: number;
+}
+
+/** Who an announcement goes to (server enum NotificationAudience). */
+export type AnnouncementAudience = 'AllStudents' | 'Students' | 'Course' | 'Batch' | 'Role';
+
+export interface SendAnnouncement {
+  title: string;
+  message: string;
+  audience: AnnouncementAudience;
+  type: string;
+  studentIds?: string[];
+  courseId?: string | null;
+  batchId?: string | null;
+  targetRole?: UserRole | null;
+  clientRequestId: string;
+}
+
+export interface SendAnnouncementResult {
+  broadcastId: string;
+  sentCount: number;
+  targetDescription: string;
+  alreadySent: boolean;
+}
+
+export interface NotificationBroadcast {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  audience: AnnouncementAudience;
+  audienceDescription: string;
+  senderName: string;
+  senderRole: string;
+  recipientCount: number;
+  deliveredCount: number;
+  readCount: number;
+  createdAtUtc: string;
+}
+
+export interface AudienceOptions {
+  students: { id: string; fullName: string; email: string; batchNames: string[] }[];
+  courses: { id: string; title: string; studentCount: number }[];
+  batches: { id: string; name: string; studentCount: number }[];
+  roles: UserRole[];
+  /** Teachers: only their own students are listed and reachable. */
+  limitedToOwnStudents: boolean;
 }
 
 export interface Announcement {

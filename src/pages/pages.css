@@ -315,3 +315,29 @@ button.role-card:hover { transform: translateY(-2px); box-shadow: var(--shadow);
 .event-delete { min-height: 30px; padding: 0 8px; margin-top: 2px; opacity: 0.35; }
 .event:hover .event-delete, .event-delete:focus-visible { opacity: 1; }
 @media (hover: none) { .event-delete { opacity: 0.8; } }
+
+/* ── Notifications page: student picker, history ───────────────────────── */
+.notify-note { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: var(--blue-50); color: var(--ink-2); font-size: 0.84rem; }
+.notify-note svg { flex: none; margin-top: 2px; color: var(--accent); }
+.picker { border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.picker-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.picker-search input { flex: 1; border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 10px 0 !important; min-height: 0 !important; }
+.picker-list { max-height: 240px; overflow-y: auto; }
+.picker-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.picker-row:last-child { border-bottom: 0; }
+.picker-row:hover { background: var(--hover); }
+.picker-row.on { background: var(--blue-50); }
+.field .picker-row input[type='checkbox'] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; border-radius: 4px; box-shadow: none; accent-color: var(--accent); flex: none; }
+.picker-main { display: flex; flex-direction: column; min-width: 0; }
+.picker-main strong { font-size: 0.86rem; color: var(--ink); }
+.picker-main small { font-size: 0.76rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-empty { padding: 18px; text-align: center; color: var(--muted); font-size: 0.85rem; }
+.picker-foot { padding: 8px 12px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.inbox-actions { display: flex; gap: 14px; margin-top: 4px; }
+.link-btn.muted-link { color: var(--muted); }
+.sent-title { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.sent-title svg { color: var(--accent); flex: none; }
+.sent-msg { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.read-meter { height: 6px; border-radius: 999px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; margin-bottom: 4px; }
+.read-meter span { display: block; height: 100%; border-radius: inherit; background: var(--green-600); transition: width 0.3s ease; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
