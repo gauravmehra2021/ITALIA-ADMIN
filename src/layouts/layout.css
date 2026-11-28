@@ -317,3 +317,4 @@
   line-height: 1.45;
 }
 .view-only-bar svg { flex: none; margin-top: 2px; color: var(--accent); }
+a.account-item { text-decoration: none; }

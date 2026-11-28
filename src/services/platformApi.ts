@@ -353,3 +353,17 @@ export interface SaveBatch {
   startTime?: string | null;
   endTime?: string | null;
 }
+
+/** "My profile": the signed-in person's own account. */
+export const accountApi = {
+  get: () => api.get<User>('/api/account'),
+  updateProfile: (data: { firstName: string; lastName: string; phoneNumber?: string | null }) =>
+    api.put<User>('/api/account/profile', data),
+  /** Signs the account out everywhere, this browser included. */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/api/account/password', { currentPassword, newPassword }),
+  requestEmailChange: (newEmail: string, currentPassword: string) =>
+    api.post<{ challengeId: string; newEmail: string; expiresAtUtc: string }>('/api/account/email/request', { newEmail, currentPassword }),
+  confirmEmailChange: (challengeId: string, code: string) =>
+    api.post<User>('/api/account/email/confirm', { challengeId, code }),
+};

@@ -43,6 +43,7 @@ const NAV: NavGroup[] = [
 
 /** Title shown in the top bar for the current address. */
 function pageTitle(path: string): { title: string; parent?: { to: string; label: string } } {
+  if (path.startsWith('/app/profile')) return { title: 'My profile' };
   if (/^\/app\/courses\/[^/]+\/lessons\//.test(path)) return { title: 'Lesson editor', parent: { to: '/app/courses', label: 'Courses' } };
   if (/^\/app\/courses\/[^/]+/.test(path)) return { title: 'Course builder', parent: { to: '/app/courses', label: 'Courses' } };
   for (const g of NAV) for (const i of g.items) if (i.end ? path === i.to : path.startsWith(i.to)) return { title: i.label };
@@ -245,6 +246,9 @@ export function AppLayout() {
                       <span className="badge badge-blue" style={{ marginTop: 6, alignSelf: 'flex-start' }}>{roleLabel(user?.role)}</span>
                     </div>
                   </div>
+                  <Link to="/app/profile" className="account-item" role="menuitem" onClick={() => setMenuOpen(false)}>
+                    <Icon.Settings size={18} /> My profile
+                  </Link>
                   <button type="button" className="account-item" role="menuitem" onClick={toggleTheme}>
                     {isDark ? <Icon.Sun size={18} /> : <Icon.Moon size={18} />}
                     {isDark ? 'Light mode' : 'Dark mode'}

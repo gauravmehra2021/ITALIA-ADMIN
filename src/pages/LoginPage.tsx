@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icons';
 import { Alert, Logo } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
-import { SESSION_EXPIRED_FLAG } from '../services/api';
+import { LOGIN_NOTICE_KEY, SESSION_EXPIRED_FLAG } from '../services/api';
 import { authApi } from '../services/platformApi';
 import { PANEL_ROLES } from '../types';
 import './login.css';
@@ -48,7 +48,12 @@ export function LoginPage() {
   // Shown once after the server rejected a saved login.
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(SESSION_EXPIRED_FLAG)) {
+      const notice = sessionStorage.getItem(LOGIN_NOTICE_KEY);
+      if (notice) {
+        sessionStorage.removeItem(LOGIN_NOTICE_KEY);
+        sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+        setInfo(notice);
+      } else if (sessionStorage.getItem(SESSION_EXPIRED_FLAG)) {
         sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
         setExpired(true);
       }

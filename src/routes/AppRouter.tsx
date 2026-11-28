@@ -13,6 +13,7 @@ import { AdminPage, CertificatesPage } from '../pages/MiscPages';
 import { AuditPage } from '../pages/AuditPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { TeamPage } from '../pages/TeamPage';
+import { ProfilePage } from '../pages/ProfilePage';
 import { StudentsPage } from '../pages/StudentsPage';
 import { BatchesPage } from '../pages/BatchesPage';
 import { ProgressPage } from '../pages/ProgressPage';
@@ -145,6 +146,8 @@ export function AppRouter() {
             </RoleGate>
           }
         />
+        {/* Every signed-in team member manages their own account here. */}
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="users" element={<Navigate to="/app/team" replace />} />
         <Route path="ai" element={<AiPage />} />
         <Route path="certificates" element={<CertificatesPage />} />

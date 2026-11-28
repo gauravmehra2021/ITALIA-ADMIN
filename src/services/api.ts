@@ -25,6 +25,8 @@ export class ApiError extends Error {
 /** Fired when the server rejects the saved login, so the app can return to the login page. */
 export const SESSION_EXPIRED_EVENT = 'sseuropa:session-expired';
 export const SESSION_EXPIRED_FLAG = 'sseuropa_session_expired';
+/** A message the login page shows once, e.g. after changing your own password or email. */
+export const LOGIN_NOTICE_KEY = 'sseuropa_login_notice';
 
 function getToken() {
   return localStorage.getItem('sseuropa_token');
